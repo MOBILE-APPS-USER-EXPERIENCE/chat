@@ -1,0 +1,1564 @@
+openapi: 3.0.3
+
+info:
+  title: Chat Server API
+  version: "1.0.0"
+  description: |
+    HTTP API of the PHP chat server (`index.php`).
+
+    ## How this API really works
+
+    The server exposes **one single endpoint**. Every call is dispatched by a
+    key named `request`:
+
+    * **GET** requests carry `request=<name>` plus all other arguments as
+      query parameters.
+    * **POST** requests carry everything â€” including `request` â€” in a
+      **JSON body**.
+
+    Because `.htaccess` rewrites every path that is not an existing file or
+    directory to `index.php`, the path itself is irrelevant to the server:
+
+    ```apache
+    RewriteEngine On
+    RewriteBase /~chkohl/chat/
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . index.php [L]
+    ```
+
+    `RewriteBase` must match the URL path of the installation directory
+    (e.g. `/` when served from the web root); without it, user-directory
+    installations (`/~user/...`) answer every virtual path with 404.
+
+    The paths used in this document (`/login`, `/getmessages`, â€¦) are
+    therefore **virtual**: they exist only so that each command can be
+    documented, and tried out, on its own. What actually selects the command is
+    the `request` parameter, which is pre-filled on every operation below.
+    Calling `GET /?request=login&...` is exactly equivalent to
+    `GET /login?request=login&...`.
+
+    ## Authentication
+
+    Authentication is token based. `register` and `login` return a `token`;
+    every other command (except `ping` and `clear`) expects it as the `token`
+    argument. Use the **Authorize** button to set it once for all operations.
+    A token is invalidated by `logout`.
+
+    Some commands accept an additional `key` argument, the **admin key**. It is
+    verified against a password hash compiled into the server and unlocks
+    extra data (real user ids, all chats regardless of membership) or
+    privileged commands.
+
+    ## Response format
+
+    Every JSON response contains at least `status` (`ok` or `error`) and
+    `code`. Successful responses are HTTP 200 with `status: "ok"`. Errors are
+    returned with the application error code **as the HTTP status code**, which
+    is why non-standard statuses such as `451`â€“`469` appear below. Error
+    responses always carry a human readable `message`.
+
+    Two commands do not return JSON: `getphoto` returns `image/png` and
+    `getfile` returns the stored binary with a `Content-Disposition` header.
+
+    ## Character restrictions
+
+    User ids must match the HSE login scheme: four letters, `it`, two digits
+    (e.g. `abcdit01`), case insensitive.
+  contact:
+    name: Christopher Kohl
+    email: Christopher.Kohl@hs-esslingen.de
+
+servers:
+  - url: "{baseUrl}"
+    description: Chat server installation
+    variables:
+      baseUrl:
+        default: https://www2.hs-esslingen.de/~chkohl/chat
+        description: >-
+          Base URL of the directory containing index.php,
+          e.g. https://example.org/chat
+
+tags:
+  - name: Account
+    description: Registration, login, tokens
+  - name: Messages
+    description: Posting and reading messages, photos and files
+  - name: Chats
+    description: Creating, joining and leaving chats
+  - name: Invites
+    description: Chat invitations
+  - name: Users
+    description: User profiles
+  - name: Service
+    description: Connectivity checks and the built-in manual
+  - name: Admin
+    description: >-
+      Commands that require the admin key. They are not advertised by the
+      server's own error messages.
+
+security:
+  - token: []
+
+paths:
+  /:
+    get:
+      tags: [Service]
+      operationId: getManual
+      summary: Built-in HTML manual
+      description: >-
+        A GET without a `request` parameter (and a POST without a JSON body)
+        returns `manual.html`, the short built-in reference of all commands.
+      security: []
+      responses:
+        "200":
+          description: The manual
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /ping:
+    get:
+      tags: [Service]
+      operationId: ping
+      summary: Check that the server is alive
+      description: The only command that needs neither token nor admin key.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestPing"
+      responses:
+        "200":
+          description: Server is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: Pong
+                code: 200
+        default:
+          $ref: "#/components/responses/Error"
+
+  /register:
+    get:
+      tags: [Account]
+      operationId: register
+      summary: Create a new user account
+      description: >-
+        Creates the account and immediately logs it in: the response contains a
+        valid token. The returned `hash` is the user's public identifier â€” it is
+        what other users need in order to invite this user to a chat.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestRegister"
+        - name: userid
+          in: query
+          required: true
+          description: HSE login id â€” four letters, `it`, two digits.
+          schema:
+            type: string
+            pattern: "^[a-zA-Z]{4}[iI][tT][0-9]{2}$"
+            example: abcdit01
+        - name: password
+          in: query
+          required: true
+          description: At least 6 characters.
+          schema:
+            type: string
+            minLength: 6
+        - name: nickname
+          in: query
+          required: true
+          description: Display name, 2â€“30 characters.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 30
+        - name: fullname
+          in: query
+          required: true
+          description: Full name, 2â€“30 characters.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 30
+      responses:
+        "200":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+              example:
+                status: ok
+                message: Registered
+                token: Ab3xY9zQ
+                hash: 7fKp2mLd
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "451":
+          description: Wrong user id â€” must be the HSE login userid (8 chars)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "452":
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "453":
+          description: Password too short (min 6 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "466":
+          description: Nickname too short (min 2 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "467":
+          description: Nickname too long (max 30 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "468":
+          description: Full name too short (min 2 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "469":
+          description: Full name too long (max 30 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /login:
+    get:
+      tags: [Account]
+      operationId: login
+      summary: Log in and obtain a token
+      description: >-
+        Returns a new token; previously issued tokens stay valid until they are
+        logged out. If the account has no password hash (for example after an
+        admin `resetuser`), the password supplied here becomes the new password.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestLogin"
+        - name: userid
+          in: query
+          required: true
+          schema:
+            type: string
+            example: abcdit01
+        - name: password
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+              example:
+                status: ok
+                message: Logged in
+                token: Ab3xY9zQ
+                hash: 7fKp2mLd
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "451":
+          description: Wrong user id format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "454":
+          description: Unknown user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "455":
+          description: Wrong password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /logout:
+    get:
+      tags: [Account]
+      operationId: logout
+      summary: Invalidate the current token
+      parameters:
+        - $ref: "#/components/parameters/RequestLogout"
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: Logged out
+                code: 200
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+
+  /validatetoken:
+    get:
+      tags: [Account]
+      operationId: validateToken
+      summary: Check whether a token is still valid
+      description: >-
+        Always answers with HTTP 200 and `status: "ok"` â€” the actual result is
+        in `message`, which is either `Token valid` or `Token NOT valid`. The
+        server delays the answer by one second to slow down brute force attempts.
+      parameters:
+        - $ref: "#/components/parameters/RequestValidateToken"
+      responses:
+        "200":
+          description: Result of the check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              examples:
+                valid:
+                  summary: Token is valid
+                  value:
+                    status: ok
+                    message: Token valid
+                    code: 200
+                invalid:
+                  summary: Token is not valid
+                  value:
+                    status: ok
+                    message: Token NOT valid
+                    code: 200
+
+  /deregister:
+    get:
+      tags: [Account]
+      operationId: deregister
+      summary: Delete the own user account
+      description: >-
+        Removes the user file. Messages already written by the user and chat
+        memberships are **not** removed â€” use the admin command `deleteuser`
+        for that.
+      parameters:
+        - $ref: "#/components/parameters/RequestDeregister"
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: Deregistered
+                code: 200
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+
+  /postmessage:
+    post:
+      tags: [Messages]
+      operationId: postMessage
+      summary: Post a message to a chat
+      description: |
+        The only POST command: all arguments, including `request` and `token`,
+        are sent in the JSON body.
+
+        A message may carry any combination of text, one photo, one file and a
+        position; all of them are optional. Photo and file are sent inline as
+        base64 and are stored separately â€” the message then only references them
+        via `photoid` / `fileid`, which are fetched with `getphoto` / `getfile`.
+
+        Text is sanitised server side: HTML tags and NUL bytes are stripped and
+        quotes are replaced by HTML entities.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request, token]
+              properties:
+                request:
+                  type: string
+                  enum: [postmessage]
+                  default: postmessage
+                token:
+                  type: string
+                  description: Token from login or register.
+                text:
+                  type: string
+                  description: Message text. Non-string values are treated as empty.
+                photo:
+                  type: string
+                  format: byte
+                  description: >-
+                    PNG image as base64, with or without the
+                    `data:image/png;base64,` prefix.
+                file:
+                  type: string
+                  format: byte
+                  description: >-
+                    Arbitrary file as base64, with or without a
+                    `data:<mime>;base64,` prefix. The type is detected from the
+                    leading bytes (PDF, ZIP/DOCX, DOC, PNG, JPEG, otherwise
+                    `application/octet-stream`).
+                position:
+                  type: string
+                  description: "Geo position, e.g. `{lat: 48.739, lon: 9.307}`."
+                chatid:
+                  type: integer
+                  default: 0
+                  description: Target chat. 0 is the main chat.
+                important:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Marks the message as important. Accepts `true`/`false`,
+                    `"true"`/`"false"` and `1`/`0`.
+            example:
+              request: postmessage
+              token: Ab3xY9zQ
+              text: Hello everyone
+              chatid: 0
+              important: false
+      responses:
+        "200":
+          description: Message stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: Message saved
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "458":
+          $ref: "#/components/responses/InvalidChatId"
+
+  /getmessages:
+    get:
+      tags: [Messages]
+      operationId: getMessages
+      summary: Read messages of a chat
+      description: >-
+        Returns all messages of the chat whose id is **greater than** `fromid`.
+        Poll with the highest `id` received so far to fetch only new messages.
+      parameters:
+        - $ref: "#/components/parameters/RequestGetMessages"
+        - name: fromid
+          in: query
+          required: false
+          description: Return only messages with a higher id. Defaults to 0 (all).
+          schema:
+            type: integer
+            default: 0
+        - name: chatid
+          in: query
+          required: false
+          description: Chat to read from. 0 is the main chat.
+          schema:
+            type: integer
+            default: 0
+        - $ref: "#/components/parameters/AdminKey"
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StatusResponse"
+                  - type: object
+                    required: [messages]
+                    properties:
+                      messages:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Message"
+              example:
+                status: ok
+                message: 2 Messages retrieved since 0
+                code: 200
+                messages:
+                  - id: 1
+                    userid: abcdit01
+                    time: 2026-09-13_18-22-05
+                    chatid: 0
+                    important: false
+                    text: Hello everyone
+                    photoid: null
+                    fileid: null
+                    usernick: Chris
+                    userhash: 7fKp2mLd
+                    userfullname: Chris Example
+                  - id: 2
+                    userid: efghit02
+                    time: 2026-09-13_18-23-41
+                    chatid: 0
+                    important: true
+                    text: Meeting at 5
+                    photoid: QWJjRGVm
+                    fileid: null
+                    position: "{lat: 48.739, lon: 9.307}"
+                    usernick: Sam
+                    userhash: 3nRt8vXb
+                    userfullname: Sam Example
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+
+  /getphoto:
+    get:
+      tags: [Messages]
+      operationId: getPhoto
+      summary: Download a photo
+      description: >-
+        Returns the raw PNG referenced by a message's `photoid`. The response is
+        an image, not JSON â€” errors, however, are still returned as JSON.
+      parameters:
+        - $ref: "#/components/parameters/RequestGetPhoto"
+        - name: photoid
+          in: query
+          required: true
+          description: Photo id taken from a message's `photoid` field.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The photo
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "457":
+          description: Invalid photoid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /getfile:
+    get:
+      tags: [Messages]
+      operationId: getFile
+      summary: Download a file
+      description: >-
+        Returns the file referenced by a message's `fileid`. The content type
+        comes from the stored metadata (falling back to
+        `application/octet-stream`), together with a `Content-Disposition:
+        attachment` header.
+      parameters:
+        - $ref: "#/components/parameters/RequestGetFile"
+        - name: fileid
+          in: query
+          required: true
+          description: File id taken from a message's `fileid` field.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The file
+          headers:
+            Content-Disposition:
+              description: attachment; filename="â€¦"
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "457":
+          description: Invalid fileid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /getprofiles:
+    get:
+      tags: [Users]
+      operationId: getProfiles
+      summary: List all user profiles
+      description: >-
+        Returns every registered user that has a hash and a nickname. Password
+        hashes and token lists are never included.
+      parameters:
+        - $ref: "#/components/parameters/RequestGetProfiles"
+        - $ref: "#/components/parameters/AdminKey"
+      responses:
+        "200":
+          description: List of profiles
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StatusResponse"
+                  - type: object
+                    required: [profiles]
+                    properties:
+                      profiles:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Profile"
+              example:
+                status: ok
+                message: 2 Profiles
+                code: 200
+                profiles:
+                  - userid: abcdit01
+                    fullname: Chris Example
+                    nickname: Chris
+                    hash: 7fKp2mLd
+                  - userid: efghit02
+                    fullname: Sam Example
+                    nickname: Sam
+                    hash: 3nRt8vXb
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+
+  /getchats:
+    get:
+      tags: [Chats]
+      operationId: getChats
+      summary: List visible chats
+      description: >-
+        Returns the main chat (id 0) plus every chat the user owns, is a member
+        of, is invited to, or that is public. With a valid admin `key`, all
+        chats are returned.
+      parameters:
+        - $ref: "#/components/parameters/RequestGetChats"
+        - $ref: "#/components/parameters/AdminKey"
+      responses:
+        "200":
+          description: List of chats
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StatusResponse"
+                  - type: object
+                    required: [chats]
+                    properties:
+                      chats:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Chat"
+              example:
+                status: ok
+                message: Chats
+                code: 200
+                chats:
+                  - chatid: 0
+                    chatname: Main Chat
+                    visibility: public
+                    role: member
+                    joined: true
+                    directchat: false
+                    owner: []
+                    participants: []
+                  - chatid: 3
+                    chatname: Project Team
+                    visibility: private
+                    role: owner
+                    joined: true
+                    directchat: false
+                    owner:
+                      hash: 7fKp2mLd
+                      nickname: Chris
+                      fullname: Chris Example
+                      userid: abcdit01
+                    participants:
+                      - hash: 7fKp2mLd
+                        nickname: Chris
+                        fullname: Chris Example
+                        userid: abcdit01
+                    invited:
+                      - hash: 3nRt8vXb
+                        nickname: Sam
+                        fullname: Sam Example
+                        userid: efghit02
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+
+  /createchat:
+    get:
+      tags: [Chats]
+      operationId: createChat
+      summary: Create a chat
+      description: >-
+        The caller becomes the owner of the new chat. The new chat id is
+        returned; ids are handed out consecutively.
+      parameters:
+        - $ref: "#/components/parameters/RequestCreateChat"
+        - name: chatname
+          in: query
+          required: true
+          description: Name of the chat, at least 2 characters.
+          schema:
+            type: string
+            minLength: 2
+        - name: ispublic
+          in: query
+          required: false
+          description: >-
+            A public chat can be joined by anyone without an invitation and is
+            listed for every user.
+          schema:
+            type: boolean
+            default: false
+        - name: directchat
+          in: query
+          required: false
+          description: >-
+            A direct chat is a one-to-one chat: only a single user can ever be
+            invited to it.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Chat created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StatusResponse"
+                  - type: object
+                    required: [chatid]
+                    properties:
+                      chatid:
+                        type: integer
+              example:
+                status: ok
+                message: Chat created
+                chatid: 3
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "462":
+          description: Chat name too short (min 2 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deletechat:
+    get:
+      tags: [Chats]
+      operationId: deleteChat
+      summary: Delete a chat
+      description: >-
+        Only the owner of the chat â€” or a caller with a valid admin `key` â€” may
+        delete it. The chat and all its messages are removed.
+      parameters:
+        - $ref: "#/components/parameters/RequestDeleteChat"
+        - $ref: "#/components/parameters/ChatId"
+        - $ref: "#/components/parameters/AdminKey"
+      responses:
+        "200":
+          description: Chat deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StatusResponse"
+                  - type: object
+                    properties:
+                      chatid:
+                        type: integer
+              example:
+                status: ok
+                message: Chat deleted
+                chatid: 3
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "405":
+          description: chatid is not numeric
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "460":
+          description: Not the chat owner, or the chat does not exist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /joinchat:
+    get:
+      tags: [Chats]
+      operationId: joinChat
+      summary: Join a chat
+      description: >-
+        Succeeds if the chat is public or the user has been invited; a pending
+        invitation is consumed. Owners and members may call it again without
+        effect.
+      parameters:
+        - $ref: "#/components/parameters/RequestJoinChat"
+        - $ref: "#/components/parameters/ChatId"
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: Joined
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "405":
+          description: chatid is not numeric
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "458":
+          description: >-
+            Invalid chat id, or the chat is private and the user is not invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leavechat:
+    get:
+      tags: [Chats]
+      operationId: leaveChat
+      summary: Leave a chat
+      description: >-
+        Removes the user from the members and invited lists. The owner cannot
+        leave â€” they delete the chat instead â€” and nobody can leave the main
+        chat (id 0).
+      parameters:
+        - $ref: "#/components/parameters/RequestLeaveChat"
+        - name: chatid
+          in: query
+          required: true
+          description: Chat to leave. Must not be 0.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Left the chat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: left chat 3
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "405":
+          description: chatid is not numeric
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "461":
+          description: >-
+            May not leave â€” either the owner (use deletechat) or not a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "464":
+          description: Cannot leave the general chat (chatid 0)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /invite:
+    get:
+      tags: [Invites]
+      operationId: invite
+      summary: Invite a user to a chat
+      description: >-
+        Only the chat owner â€” or a caller with a valid admin `key` â€” may invite.
+        The invited user is identified by their public `hash`, as returned by
+        `getprofiles`. A direct chat accepts only one invitation in total.
+      parameters:
+        - $ref: "#/components/parameters/RequestInvite"
+        - $ref: "#/components/parameters/ChatId"
+        - name: invitedhash
+          in: query
+          required: true
+          description: Public hash of the user to invite.
+          schema:
+            type: string
+            example: 3nRt8vXb
+        - $ref: "#/components/parameters/AdminKey"
+      responses:
+        "200":
+          description: Invitation sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: Invited
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "405":
+          description: chatid is not numeric
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "458":
+          description: >-
+            Invalid chat id, not the chat owner, or a direct chat that already
+            has an invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "463":
+          description: Invalid user hash
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /getinvites:
+    get:
+      tags: [Invites]
+      operationId: getInvites
+      summary: List own pending invitations
+      description: Invitations to the main chat (id 0) are never listed.
+      parameters:
+        - $ref: "#/components/parameters/RequestGetInvites"
+      responses:
+        "200":
+          description: List of pending invitations
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StatusResponse"
+                  - type: object
+                    required: [invites]
+                    properties:
+                      invites:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Invite"
+              example:
+                status: ok
+                message: Invites
+                code: 200
+                invites:
+                  - chatid: 3
+                    chatname: Project Team
+                    directchat: false
+                    owner:
+                      hash: 7fKp2mLd
+                      nickname: Chris
+                      fullname: Chris Example
+                      userid: abcdit01
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+
+  /rejectinvite:
+    get:
+      tags: [Invites]
+      operationId: rejectInvite
+      summary: Reject a pending invitation
+      parameters:
+        - $ref: "#/components/parameters/RequestRejectInvite"
+        - $ref: "#/components/parameters/ChatId"
+      responses:
+        "200":
+          description: Invitation rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: Invite rejected
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "405":
+          description: chatid is not numeric
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "458":
+          description: Invalid chat id, or no invitation for this chat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /resetuser:
+    get:
+      tags: [Admin]
+      operationId: resetUser
+      summary: Reset a user's password and tokens
+      description: >-
+        Clears the password hash and all tokens of the given user. The next
+        `login` for that account then sets a new password. Requires a valid
+        admin `key` in addition to the caller's own token.
+      parameters:
+        - $ref: "#/components/parameters/RequestResetUser"
+        - $ref: "#/components/parameters/RequiredAdminKey"
+        - $ref: "#/components/parameters/UserHash"
+      responses:
+        "200":
+          description: User reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: User reset
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "459":
+          $ref: "#/components/responses/NoAdmin"
+
+  /deleteuser:
+    get:
+      tags: [Admin]
+      operationId: deleteUser
+      summary: Delete a user with all their data
+      description: >-
+        Deletes the user account and, unlike `deregister`, also removes all
+        their messages and their memberships in every chat. Requires a valid
+        admin `key`.
+      parameters:
+        - $ref: "#/components/parameters/RequestDeleteUser"
+        - $ref: "#/components/parameters/RequiredAdminKey"
+        - $ref: "#/components/parameters/UserHash"
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: User reset
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "456":
+          $ref: "#/components/responses/InvalidToken"
+        "459":
+          $ref: "#/components/responses/NoAdmin"
+
+  /clear:
+    get:
+      tags: [Admin]
+      operationId: clear
+      summary: Delete all data on the server
+      description: >-
+        Irreversibly removes all users, photos, messages and chats as well as
+        the error log. Requires a valid admin `key`; no token is needed.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestClear"
+        - $ref: "#/components/parameters/RequiredAdminKey"
+      responses:
+        "200":
+          description: All data cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+                message: All chat data cleared
+                code: 200
+        "403":
+          $ref: "#/components/responses/MissingParameter"
+        "459":
+          $ref: "#/components/responses/NoAdmin"
+
+components:
+  securitySchemes:
+    token:
+      type: apiKey
+      in: query
+      name: token
+      description: >-
+        The token returned by `register` or `login`, sent as the query
+        parameter `token`. For the POST command `postmessage` the token is part
+        of the JSON body instead.
+
+  parameters:
+    RequestPing:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [ping], default: ping }
+    RequestRegister:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [register], default: register }
+    RequestLogin:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [login], default: login }
+    RequestLogout:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [logout], default: logout }
+    RequestValidateToken:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [validatetoken], default: validatetoken }
+    RequestDeregister:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [deregister], default: deregister }
+    RequestGetMessages:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [getmessages], default: getmessages }
+    RequestGetPhoto:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [getphoto], default: getphoto }
+    RequestGetFile:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [getfile], default: getfile }
+    RequestGetProfiles:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [getprofiles], default: getprofiles }
+    RequestGetChats:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [getchats], default: getchats }
+    RequestCreateChat:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [createchat], default: createchat }
+    RequestDeleteChat:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [deletechat], default: deletechat }
+    RequestJoinChat:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [joinchat], default: joinchat }
+    RequestLeaveChat:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [leavechat], default: leavechat }
+    RequestInvite:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [invite], default: invite }
+    RequestGetInvites:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [getinvites], default: getinvites }
+    RequestRejectInvite:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [rejectinvite], default: rejectinvite }
+    RequestResetUser:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [resetuser], default: resetuser }
+    RequestDeleteUser:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [deleteuser], default: deleteuser }
+    RequestClear:
+      name: request
+      in: query
+      required: true
+      schema: { type: string, enum: [clear], default: clear }
+
+    ChatId:
+      name: chatid
+      in: query
+      required: true
+      description: Id of the chat. 0 is the main chat.
+      schema:
+        type: integer
+
+    AdminKey:
+      name: key
+      in: query
+      required: false
+      description: >-
+        Optional admin key. When valid, the response contains additional data
+        that is otherwise hidden.
+      schema:
+        type: string
+
+    RequiredAdminKey:
+      name: key
+      in: query
+      required: true
+      description: Admin key. The command fails with 459 if it is not valid.
+      schema:
+        type: string
+
+    UserHash:
+      name: userhash
+      in: query
+      required: true
+      description: Public hash of the user the command acts on.
+      schema:
+        type: string
+        example: 3nRt8vXb
+
+  schemas:
+    StatusResponse:
+      type: object
+      description: Envelope shared by every JSON response.
+      required: [status, code]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        message:
+          type: string
+          description: Human readable result or error description.
+        code:
+          type: integer
+          description: >-
+            Application status code. 200 on success; on failure it mirrors the
+            HTTP status code of the response.
+          example: 200
+
+    ErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/StatusResponse"
+        - type: object
+          required: [message]
+          properties:
+            status:
+              type: string
+              enum: [error]
+      example:
+        status: error
+        message: Invalid token
+        code: 456
+
+    AuthResponse:
+      allOf:
+        - $ref: "#/components/schemas/StatusResponse"
+        - type: object
+          required: [token, hash]
+          properties:
+            token:
+              type: string
+              description: Session token, 8 characters. Send it with every other command.
+              example: Ab3xY9zQ
+            hash:
+              type: string
+              description: >-
+                The user's public identifier, 8 characters. Other users need it
+                to invite this user to a chat.
+              example: 7fKp2mLd
+
+    Message:
+      type: object
+      description: >-
+        A single message. `id` is unique within its chat and increases
+        monotonically â€” use the highest one seen as `fromid` when polling.
+      required: [id, userid, time, chatid, important]
+      properties:
+        id:
+          type: integer
+          example: 42
+        userid:
+          type: string
+          description: Login id of the author.
+          example: abcdit01
+        time:
+          type: string
+          description: Server time of arrival, formatted `Y-m-d_H-i-s`.
+          example: 2026-09-13_18-22-05
+        chatid:
+          type: integer
+          example: 0
+        important:
+          type: boolean
+        text:
+          type: string
+          description: >-
+            Sanitised message text. Absent if the message carries no text.
+        photoid:
+          type: string
+          nullable: true
+          description: Id for `getphoto`, or null if the message has no photo.
+        fileid:
+          type: string
+          nullable: true
+          description: Id for `getfile`, or null if the message has no file.
+        position:
+          type: string
+          description: >-
+            Geo position as sent by the client, e.g.
+            `{lat: 48.739, lon: 9.307}`. Absent if none was sent.
+        usernick:
+          type: string
+          description: Nickname of the author, resolved at read time.
+        userhash:
+          type: string
+          description: Public hash of the author.
+        userfullname:
+          type: string
+          description: Full name of the author.
+        username:
+          type: string
+          description: Login id of the author. Only present with a valid admin key.
+
+    Profile:
+      type: object
+      description: >-
+        A user profile as returned by `getprofiles` â€” every stored user
+        attribute except the password hash and the token list.
+      properties:
+        userid:
+          type: string
+          example: abcdit01
+        nickname:
+          type: string
+          example: Chris
+        fullname:
+          type: string
+          example: Chris Example
+        hash:
+          type: string
+          description: Public identifier, used to invite this user.
+          example: 7fKp2mLd
+
+    ChatParticipant:
+      type: object
+      description: Short profile of a chat owner, member or invitee.
+      properties:
+        hash:
+          type: string
+          example: 7fKp2mLd
+        nickname:
+          type: string
+          example: Chris
+        fullname:
+          type: string
+          example: Chris Example
+        userid:
+          type: string
+          example: abcdit01
+
+    Chat:
+      type: object
+      description: >-
+        A chat as seen by the calling user. The main chat (id 0) is a special
+        case: it is always public and joined, has no `invited` list, and its
+        `owner` and `participants` are returned as empty arrays.
+      required: [chatid, chatname, visibility, role, joined, directchat]
+      properties:
+        chatid:
+          type: integer
+          example: 3
+        chatname:
+          type: string
+          example: Project Team
+        visibility:
+          type: string
+          enum: [public, private]
+          description: >-
+            A public chat may be joined by anyone; a private chat requires an
+            invitation.
+        role:
+          type: string
+          enum: [owner, member, invited, admin, none]
+          description: Role of the calling user in this chat.
+        joined:
+          type: boolean
+          description: True if the calling user is owner or member.
+        directchat:
+          type: boolean
+          description: One-to-one chat â€” only a single user can be invited.
+        owner:
+          oneOf:
+            - $ref: "#/components/schemas/ChatParticipant"
+            - type: array
+              maxItems: 0
+              items: {}
+          description: >-
+            Profile of the chat owner. An empty array for the main chat and for
+            chats whose owner no longer exists.
+        participants:
+          type: array
+          description: Owner and members of the chat. Empty for the main chat.
+          items:
+            $ref: "#/components/schemas/ChatParticipant"
+        invited:
+          type: array
+          description: >-
+            Users invited but not yet joined. The key is absent for the main
+            chat.
+          items:
+            $ref: "#/components/schemas/ChatParticipant"
+
+    Invite:
+      type: object
+      description: A pending invitation as returned by `getinvites`.
+      required: [chatid, chatname, directchat]
+      properties:
+        chatid:
+          type: integer
+          example: 3
+        chatname:
+          type: string
+          example: Project Team
+        directchat:
+          type: boolean
+        owner:
+          $ref: "#/components/schemas/ChatParticipant"
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    MissingParameter:
+      description: >-
+        A required parameter is missing (403) or empty (404). The server also
+        answers 400 when `request` itself is missing, 401 for an unknown
+        request name, 402 for illegal characters and 405 for a non-numeric
+        value where a number is required.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            status: error
+            message: "Request 'login' must contain a 'password' parameter ('The users password')"
+            code: 403
+
+    InvalidToken:
+      description: Invalid token â€” log in again.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            status: error
+            message: Invalid token
+            code: 456
+
+    InvalidChatId:
+      description: Invalid chat id â€” the chat does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            status: error
+            message: "Invalid chatid: 7"
+            code: 458
+
+    NoAdmin:
+      description: No admin â€” the supplied key is not valid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            status: error
+            message: No admin
+            code: 459
