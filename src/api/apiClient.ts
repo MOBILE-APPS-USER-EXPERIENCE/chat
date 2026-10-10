@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_BASE_URL = 'https://www2.hs-esslingen.de/~chkohl/chat';
+const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_CHAT_API_URL || 'https://www2.hs-esslingen.de/~chkohl/chat';
 
 const BASE_URL_KEY = 'chat.baseUrl';
 const TOKEN_KEY = 'chat.token';
@@ -17,6 +17,7 @@ let baseUrl: string = DEFAULT_BASE_URL;
 let token: string | undefined;
 let adminKey: string | undefined;
 let initialized = false;
+let initialization: Promise<void> | undefined;
 
 function normalizeBaseUrl(url: string): string {
     let normalized = url.trim();
@@ -26,15 +27,21 @@ function normalizeBaseUrl(url: string): string {
 
 async function ensureInitialized() {
     if (initialized) return;
-    const [storedBaseUrl, storedToken, storedAdminKey] = await Promise.all([
-        AsyncStorage.getItem(BASE_URL_KEY),
-        AsyncStorage.getItem(TOKEN_KEY),
-        AsyncStorage.getItem(ADMIN_KEY_KEY),
-    ]);
-    baseUrl = storedBaseUrl ? normalizeBaseUrl(storedBaseUrl) : DEFAULT_BASE_URL;
-    token = storedToken ?? undefined;
-    adminKey = storedAdminKey ?? undefined;
-    initialized = true;
+    initialization ??= (async () => {
+        const [storedBaseUrl, storedToken, storedAdminKey] = await Promise.all([
+            AsyncStorage.getItem(BASE_URL_KEY),
+            AsyncStorage.getItem(TOKEN_KEY),
+            AsyncStorage.getItem(ADMIN_KEY_KEY),
+        ]);
+        baseUrl = storedBaseUrl ? normalizeBaseUrl(storedBaseUrl) : DEFAULT_BASE_URL;
+        token = storedToken ?? undefined;
+        adminKey = storedAdminKey ?? undefined;
+        initialized = true;
+    })().catch((error) => {
+        initialization = undefined;
+        throw error;
+    });
+    await initialization;
 }
 
 export async function getBaseUrl(): Promise<string> {
@@ -43,18 +50,21 @@ export async function getBaseUrl(): Promise<string> {
 }
 
 export async function setBaseUrl(url: string | undefined): Promise<void> {
+    await ensureInitialized();
     baseUrl = url ? normalizeBaseUrl(url) : DEFAULT_BASE_URL;
     if (url) await AsyncStorage.setItem(BASE_URL_KEY, baseUrl);
     else await AsyncStorage.removeItem(BASE_URL_KEY);
 }
 
 export async function setToken(value: string | undefined) {
+    await ensureInitialized();
     token = value;
     if (value) await AsyncStorage.setItem(TOKEN_KEY, value);
     else await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
 export async function setAdminKey(value: string | undefined) {
+    await ensureInitialized();
     adminKey = value;
     if (value) await AsyncStorage.setItem(ADMIN_KEY_KEY, value);
     else await AsyncStorage.removeItem(ADMIN_KEY_KEY);
@@ -64,6 +74,25 @@ export function getToken() { return token; }
 export function getAdminKey() { return adminKey; }
 
 type StatusResponse = { status: 'ok' | 'error'; message?: string; code: number; };
+
+async function fetchJson<T extends StatusResponse>(url: string, init?: RequestInit): Promise<T> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+        // GET commands return live session data and must not reuse browser HTTP cache.
+        const response = await fetch(url, { ...init, cache: 'no-store', signal: controller.signal });
+        const json = await response.json() as T;
+        if (json.status === 'error') {
+            throw new ApiError(json.code, json.message ?? 'Serverfehler');
+        }
+        if (!response.ok || json.status !== 'ok') {
+            throw new Error('Der Server hat keine gültige Antwort gesendet.');
+        }
+        return json;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
 
 export async function request<T extends StatusResponse>(
     command: string,
@@ -82,13 +111,7 @@ export async function request<T extends StatusResponse>(
         if (value !== undefined) query.append(key, String(value));
     }
 
-    const response = await fetch(`${baseUrl}/?${query.toString()}`);
-    const json = (await response.json()) as T;
-
-    if (json.status === 'error') {
-        throw new ApiError(json.code, json.message ?? 'Unknown error');
-    }
-    return json;
+    return fetchJson<T>(`${baseUrl}/?${query.toString()}`);
 }
 
 export async function postRequest<T extends StatusResponse>(
@@ -98,17 +121,12 @@ export async function postRequest<T extends StatusResponse>(
     await ensureInitialized();
 
     const payload = { request: command, token, ...body };
-    const response = await fetch(`${baseUrl}/`, {
+    return fetchJson<T>(`${baseUrl}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
     });
 
-    const json = (await response.json()) as T;
-    if (json.status === 'error') {
-        throw new ApiError(json.code, json.message ?? 'Unknown error');
-    }
-    return json;
 }
 
 export type BinaryResult = {

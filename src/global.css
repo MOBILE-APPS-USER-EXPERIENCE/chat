@@ -7,3 +7,30 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* Keep keyboard location visible on every custom React Native Web control. */
+[role='button']:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #24765c !important;
+  outline-offset: 3px;
+}
+
+/* Treat the icon, input and clear action as one search control. */
+#chat-search-box:focus-within {
+  outline: 3px solid #24765c;
+  outline-offset: 3px;
+}
+#chat-search-box input:focus,
+#chat-search-box input:focus-visible {
+  outline: none !important;
+}
+
+/* Respect the user's preference for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}

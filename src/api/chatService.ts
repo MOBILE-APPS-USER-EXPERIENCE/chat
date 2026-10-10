@@ -5,7 +5,13 @@ export async function getChats(useAdminKey = true): Promise<Chat[]> {
     const res = await request<{ status: 'ok'; code: number; message: string; chats: Chat[]; }>(
         'getchats', {}, { includeAdminKey: useAdminKey },
     );
-    return res.chats;
+    return res.chats.map((chat) => ({ ...chat, chatid: normalizeChatId(chat.chatid) }));
+}
+
+function normalizeChatId(value: unknown): number {
+    const id = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+    if (!Number.isSafeInteger(id) || id < 0) throw new Error('Der Server hat keine gültige Chat-ID gesendet.');
+    return id;
 }
 
 export async function createChat(params: {
@@ -16,7 +22,7 @@ export async function createChat(params: {
     const res = await request<{ status: 'ok'; code: number; message: string; chatid: number; }>(
         'createchat', params,
     );
-    return res.chatid;
+    return normalizeChatId(res.chatid);
 }
 
 export async function deleteChat(chatid: number, useAdminKey = true): Promise<void> {
