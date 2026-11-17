@@ -1,7 +1,7 @@
 import { Button, H2, Text, YStack } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/layout';
 import { triggerPrimaryButtonHaptic } from '@/utils/primary-button-haptic';
 import { router } from 'expo-router';
 

@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Form, H2, Input, Label, ScrollView, Spinner, Text, YStack } from 'tamagui';
 
 import { register } from '@/api/authService';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/layout';
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
@@ -41,7 +41,7 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           px={Spacing.four}
           pt={insets.top + Spacing.five}
-          pb={insets.bottom + BottomTabInset + Spacing.four}>
+          pb={insets.bottom + Spacing.four}>
           <Form onSubmit={() => void handleRegister()}>
             <YStack self="center" gap={Spacing.two} w="100%">
               <H2>Registrieren</H2>

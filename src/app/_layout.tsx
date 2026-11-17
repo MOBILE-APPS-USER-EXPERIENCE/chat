@@ -3,6 +3,7 @@ import { TamaguiProvider } from 'tamagui';
 
 import { initApiClient } from '@/api/apiClient';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import '@/global.css';
 import { useEffect, useState } from 'react';
 import { tamaguiConfig } from '../tamagui.config';
 
@@ -24,8 +25,6 @@ export default function RootLayout() {
   }, []);
 
   if (!ready) return null;
-
-
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme={theme}>
       <ThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>

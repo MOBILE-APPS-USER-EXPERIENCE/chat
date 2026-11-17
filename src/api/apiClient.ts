@@ -6,7 +6,7 @@ const BACKUP_BASE_URL = 'https://api.chat.throin.de';
 const BASE_URL_KEY = 'chat.baseUrl';
 const TOKEN_KEY = 'chat.token';
 const ADMIN_KEY_KEY = 'chat.adminKey';
-const X_ACCESS_TOKEN = 'token';
+const X_ACCESS_TOKEN = process.env.EXPO_PUBLIC_X_ACCESS_TOKEN ?? '';
 const DEFAULT_BASE_URL_PING_TIMEOUT_MS = 3000;
 
 export class ApiError extends Error {
