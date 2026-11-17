@@ -39,3 +39,15 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## UI rules (Tamagui)
+
+- Use Tamagui components only (`YStack`, `XStack`, `Text`, `H1`-`H6`, `Button`, `Input`, `Label`, `Form`, `Sheet`, `Dialog`, `AlertDialog`, `Adapt`, `Spinner`, `ScrollView`, etc.).
+- Config lives in `tamagui.config.ts` (project root). Use theme tokens (`$background`, `$color`, `$4`, `$borderColor`, ...). No hardcoded colors, sizes or spacing.
+- Do NOT use `StyleSheet.create`, inline `style={{}}` objects, or RN `View`/`Text`/`TextInput`/`Pressable` for UI. Exceptions: `FlatList`/`FlashList` and navigation primitives.
+- Do NOT create new "themed-*" wrapper components.
+- No `Platform.OS` checks and no `.ios/.android` files, except `expo-haptics` calls and the existing `use-color-scheme.web.ts`.
+- Icons: `@tamagui/lucide-icons` only.
+- Do not modify `src/api/**`. Business logic, navigation and behavior must stay identical. Only the presentation layer changes.
+- After every change run `npx tsc --noEmit` and `npm run lint`, and fix all errors.
+- Keep the Tamagui prop API already used in `src/app/index.tsx` (`items`, `justify`, `bg`, ...).
