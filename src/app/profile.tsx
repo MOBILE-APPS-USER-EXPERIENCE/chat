@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Button, H2, YStack } from 'tamagui';
 
+import { triggerPrimaryButtonHaptic } from '@/utils/primary-button-haptic';
 
 function handleLogout() {
     logout();
@@ -23,14 +24,23 @@ export default function ProfileScreen() {
         <YStack flex={1} items="center" justify="center" gap={8} backgroundColor="background">
             <H2>Profil</H2>
 
-            <Button onPress={handleLogout}>Logout</Button>
+            <Button
+                onPress={() => {
+                    triggerPrimaryButtonHaptic();
+                    handleLogout();
+                }}>
+                Logout
+            </Button>
 
             <Button onPress={() => void 0}>test</Button>
 
             <Button
                 backgroundColor="error"
                 color="errorText"
-                onPress={() => setDialogVisible(true)}>
+                onPress={() => {
+                    triggerPrimaryButtonHaptic();
+                    setDialogVisible(true);
+                }}>
                 Account löschen
             </Button>
             <ConfirmDialog
