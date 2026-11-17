@@ -22,8 +22,9 @@ Weitere Befehle:
 npm run android
 npm run ios
 npm run web
+npm test
 npx tsc --noEmit
-npx expo lint
+npm run lint
 ```
 
 Die Routen liegen unter `src/app`. Die Authentifizierung ist unter `src/app/(auth)` organisiert;

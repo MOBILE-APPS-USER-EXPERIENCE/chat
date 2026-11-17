@@ -1,4 +1,5 @@
 import type { AccountStorage } from '../../ports';
+import { ChatSnapshot } from '../../types';
 
 export function chatRepositoryContract(name: string, make: () => Promise<AccountStorage>) {
     describe(`ChatRepository (${name})`, () => {
@@ -46,6 +47,28 @@ export function chatRepositoryContract(name: string, make: () => Promise<Account
             expect(await storage.messages.get(1, 1)).toBeNull();
             expect(await storage.chats.get(2)).not.toBeNull();
             expect(await storage.messages.get(2, 2)).not.toBeNull();
+        });
+
+        it('returns copies and isolates stored state from caller mutations', async () => {
+            const input: ChatSnapshot = snapshot(1);
+            await storage.chats.applySnapshot([input], 100);
+            input.name = 'mutated input';
+            input.members.push({ userid: 'late', role: 'member' });
+
+            const chat = await storage.chats.get(1);
+            const [listed] = await storage.chats.list();
+            const members = await storage.chats.listMembers(1);
+            const [member] = members;
+            if (!chat || !listed || !member) throw new Error('expected stored chat data');
+            chat.name = 'mutated get';
+            chat.polledUpTo = 99;
+            listed.name = 'mutated list';
+            member.role = 'owner';
+            members.push({ userid: 'extra', role: 'member' });
+
+            expect(await storage.chats.get(1)).toMatchObject({ name: 'Chat 1', polledUpTo: 0 });
+            expect((await storage.chats.list())[0]).toMatchObject({ name: 'Chat 1' });
+            expect(await storage.chats.listMembers(1)).toEqual([{ userid: 'u1', role: 'member' }]);
         });
     });
 }

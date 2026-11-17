@@ -7,7 +7,7 @@ import { registryRepositoryContract } from './contracts/registry.contract';
 chatRepositoryContract('memory', async () => new MemoryAccountStorageFactory().open('test'));
 messageRepositoryContract('memory', async () => new MemoryAccountStorageFactory().open('test'));
 profileRepositoryContract('memory', async () => new MemoryAccountStorageFactory().open('test'));
-registryRepositoryContract('memory', () => {
+registryRepositoryContract('memory', async () => {
     let nextId = 0;
     return new MemoryRegistryRepository({ now: () => 123, newId: () => `id-${++nextId}` });
 });

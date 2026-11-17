@@ -37,7 +37,8 @@ This file is for AI agents **and** humans. Humans own every line that lands in t
   Details: `docs/ai-use/api-services.md`.
 - Server selection: default server is pinged; if unreachable the backup server is used.
   The `X-Access-Token` header is only sent to the default server.
-- Token, admin key and base URL are stored in AsyncStorage (not secure storage).
+- Today the API client still stores token, admin key and base URL in AsyncStorage (not
+  secure storage). They will be moved to `SecretStore` (`src/storage`) in the near future.
 - Language: UI strings are German; identifiers, comments and commit messages are English.
 
 ## Repo map

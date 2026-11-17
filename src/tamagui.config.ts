@@ -55,5 +55,6 @@ export default tamaguiConfig
 export type Conf = typeof tamaguiConfig
 
 declare module 'tamagui' {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Tamagui requires interface module augmentation
     interface TamaguiCustomConfig extends Conf { }
 }

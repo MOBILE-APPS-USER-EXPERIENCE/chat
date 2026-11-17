@@ -55,5 +55,18 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
             expect(await storage.chats.get(3)).not.toBeNull();
             expect(await storage.messages.get(4, 2)).not.toBeNull();
         });
+
+        it('returns copies and isolates stored state from caller mutations', async () => {
+            const input = msg(1);
+            await storage.messages.appendBatch(3, [input], 2000);
+            input.text = 'mutated input';
+            const fetched = await storage.messages.get(3, 1);
+            const [paged] = await storage.messages.listPage(3, { limit: 10 });
+            if (!fetched || !paged) throw new Error('expected a stored message');
+            fetched.text = 'mutated get';
+            paged.text = 'mutated page';
+            expect((await storage.messages.get(3, 1))?.text).toBe('m1');
+            expect((await storage.messages.listPage(3, { limit: 10 }))[0]?.text).toBe('m1');
+        });
     });
 }

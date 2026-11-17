@@ -29,6 +29,25 @@ export interface KeyValueStore {
 export class AccountExistsError extends Error { }
 export class ServerExistsError extends Error { }
 
+/** Minimal async string storage. AsyncStorage satisfies this structurally. */
+export interface AsyncStringBackend {
+    /** Reads the raw string stored under the key, or null when it is absent. */
+    getItem(key: string): Promise<string | null>;
+    /** Writes the raw string under the key, replacing any previous value. */
+    setItem(key: string, value: string): Promise<void>;
+    /** Removes the key; absence is not an error. */
+    removeItem(key: string): Promise<void>;
+}
+
+/** Thrown when a stored value is not valid JSON. The message contains the key, never the value. */
+export class KeyValueParseError extends Error { }
+
+/** Thrown when the stored registry document has an invalid shape. */
+export class RegistryCorruptError extends Error { }
+
+/** Thrown when the stored registry document has an unknown version. */
+export class RegistryVersionError extends Error { }
+
 export interface RegistryRepository {
     /** Returns all registered servers. */
     listServers(): Promise<ServerEntry[]>;
