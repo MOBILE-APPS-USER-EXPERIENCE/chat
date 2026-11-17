@@ -1,53 +1,149 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+# AGENTS.md
 
-## Expo has changed — do not trust your training data
+Chat client for the HSE PHP chat server: Expo / React Native / Tamagui / TypeScript.
+Targets: iOS, Android, Web (static export served by nginx in Docker).
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+This file is for AI agents **and** humans. Humans own every line that lands in this repo.
 
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
+## Working agreement (read first)
+
+1. **The human must be able to explain the result.** Do not produce code the requester
+   could not maintain without AI. If you use a concept, API or pattern that does not
+   already exist in this repo, explain it in 2–4 sentences (what, why, where to read more).
+2. **Smallest change that solves the task.** No drive-by refactors, renames, formatting
+   sweeps or dependency bumps. Mention other findings in your summary instead of fixing them.
+3. **Follow existing patterns.** Read two similar files before writing a new one.
+4. **Ask before you:**
+   - add or upgrade a dependency
+   - introduce a new folder structure or architectural pattern
+   - edit `src/api/**`, CI (`.github/`), `Dockerfile`, `nginx.conf` or `app.json`
+   - do anything that contradicts an ADR in `docs/adr/`
+   - define a message "envelope" format (see "Features beyond the API")
+5. **Never guess API behavior.** Source of truth: `docs/openapi.yaml` and `src/api/*`.
+   If something is not specified there, say so and ask. Do not invent endpoints or fields.
+6. **No silent failures.** No empty `catch`, no `as any`, no `@ts-ignore` / `eslint-disable`
+   without a comment explaining why. Always `await` promises or deliberately `void` them
+   with a reason. Show errors to the user via `ApiError.message`.
+7. **Verify, then report honestly.** Run `npx tsc --noEmit` and `npm run lint`.
+   If you could not run something, say so. Never claim "done" or "tested" without evidence.
+8. **Finish every task with a summary** (format at the bottom).
+
+## Project facts
+
+- Package manager: **npm** (`package-lock.json`). Do not use bun/yarn/pnpm.
+- Versions: see `package.json` (Expo SDK, React Native, Tamagui). Do not trust memory.
+- Backend: one dispatch endpoint (`GET /?request=<cmd>`), errors are returned as HTTP
+  status codes (451–469), no WebSocket and no push. The app polls (5 s).
+  Details: `docs/ai-use/api-services.md`.
+- Server selection: default server is pinged; if unreachable the backup server is used.
+  The `X-Access-Token` header is only sent to the default server.
+- Token, admin key and base URL are stored in AsyncStorage (not secure storage).
+- Language: UI strings are German; identifiers, comments and commit messages are English.
+
+## Repo map
+
+- `src/app/` – Expo Router screens only (`(auth)/login`, `(auth)/register`, `index`, `profile`)
+- `src/api/` – hand-written API client
+  - `apiClient.ts`: `request`, `postRequest`, `requestBinary`, `ApiError`, token/admin key/base URL state
+  - `*Service.ts`: one file per domain (auth, chat, message, invite, user, admin, connectivity)
+  - `serverSettings.ts`: change/reset server
+  - `types.ts`: types derived by hand from `docs/openapi.yaml`
+- `src/components/` – reusable UI (e.g. `confirm-dialog.tsx`)
+- `src/constants/layout.ts` – `Spacing` scale
+- `src/hooks/`, `src/utils/` – hooks and helpers
+- `src/tamagui.config.ts` – theme and tokens
+- `docs/adr/` – decisions; `docs/ai-use/` – documentation of AI-assisted design work
+- `export_issues.md` – snapshot of the backlog. The issue tracker is the source of truth.
 
 ## Commands
 
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
-
 ```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
+npm install                 # install from lockfile
+npx expo install <package>  # ALWAYS use this to add packages (SDK-compatible versions)
+npx expo start              # dev server
+npm run web                 # web
 npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
+npm run lint                # lint
+npx expo-doctor             # diagnose dependency/config issues
+npx expo install --fix      # fix incompatible versions
 ```
 
-Run lint and typecheck before declaring any task done.
+## Expo rules
 
-## Navigation & Routing
+Expo ships breaking changes every SDK release. Before touching an Expo/EAS/React Native API:
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+1. Read the major version of `expo` in `package.json`.
+2. Fetch the matching docs: `https://docs.expo.dev/versions/v<major>.0.0/`
+3. For anything else use https://docs.expo.dev/llms.txt. Do not answer from memory.
 
-## Building with EAS
+- Navigation: Expo Router only. Every file in `src/app/` is a route; keep non-route code outside it.
+  Import `Link`, `router`, `useLocalSearchParams` from `expo-router`.
+- `ios/` and `android/` are generated (Continuous Native Generation). Never create or edit them.
+  Configure native behavior in `app.json` / config plugins.
+- Expo Go only contains bundled native modules. New native libraries need a development build.
+- Prefer Expo modules over third-party libraries.
+- Environment variables prefixed `EXPO_PUBLIC_` are **inlined into the public bundle**.
+  Never put real secrets in them, and never commit `.env` files.
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+## API layer rules
 
-## Rules
-
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+- Layering: **screen → service → `apiClient`**. Screens never call `fetch` or `request` directly.
+- New endpoint = check `docs/openapi.yaml` → add type to `types.ts` → add function to the
+  matching `*Service.ts`. Keep types in sync with the spec.
+- Never log or display the token or admin key.
+- Error handling: catch `ApiError`, show `message`. Code 456 means invalid token (log in again);
+  459 means invalid admin key (already handled in `adminService.ts`).
+- If a change to `src/api/**` is AI-designed, add or update a short note in `docs/ai-use/`.
 
 ## UI rules (Tamagui)
 
-- Use Tamagui components only (`YStack`, `XStack`, `Text`, `H1`-`H6`, `Button`, `Input`, `Label`, `Form`, `Sheet`, `Dialog`, `AlertDialog`, `Adapt`, `Spinner`, `ScrollView`, etc.).
-- Config lives in `tamagui.config.ts` (project root). Use theme tokens (`$background`, `$color`, `$4`, `$borderColor`, ...). No hardcoded colors, sizes or spacing.
-- Do NOT use `StyleSheet.create`, inline `style={{}}` objects, or RN `View`/`Text`/`TextInput`/`Pressable` for UI. Exceptions: `FlatList`/`FlashList` and navigation primitives.
-- Do NOT create new "themed-*" wrapper components.
-- No `Platform.OS` checks and no `.ios/.android` files, except `expo-haptics` calls and the existing `use-color-scheme.web.ts`.
+- Use Tamagui components (`YStack`, `XStack`, `Text`, `H1`–`H6`, `Button`, `Input`, `Label`,
+  `Form`, `Sheet`, `Dialog`, `Adapt`, `Spinner`, `ScrollView`, ...).
+- Colors come from theme keys defined in `src/tamagui.config.ts`
+  (`background`, `backgroundElement`, `backgroundSelected`, `text`, `textSecondary`,
+  `accent`, `accentContrast`, `error`, `errorBackground`, `errorText`).
+  Spacing comes from `Spacing` in `src/constants/layout.ts`. Do not add new hex/rgba values.
+- Use the prop style already used in screens (`items`, `justify`, `px`, `self`, `backgroundColor`, ...).
+  Do not mix in the old `alignItems` / `justifyContent`.
+- No `StyleSheet.create`, no inline `style={{}}`, no RN `View`/`Text`/`TextInput`/`Pressable`.
+  Allowed: `FlatList`/`FlashList`, navigation primitives, `KeyboardAvoidingView`.
+- No new "themed-*" wrapper components.
+- No `Platform.OS` checks and no `.ios`/`.android` files, except `expo-haptics` calls and
+  `use-color-scheme.web.ts`.
 - Icons: `@tamagui/lucide-icons` only.
-- Do not modify `src/api/**`. Business logic, navigation and behavior must stay identical. Only the presentation layer changes.
-- After every change run `npx tsc --noEmit` and `npm run lint`, and fix all errors.
-- Keep the Tamagui prop API already used in `src/app/index.tsx` (`items`, `justify`, `bg`, ...).
+- Destructive actions (delete, reset, clear) need a confirmation via `ConfirmDialog`.
+
+## Features beyond the API (client conventions)
+
+The server cannot do: edit/delete messages, reactions, read receipts, avatars, tags,
+sub-groups, write-protected (broadcast) chats, or push. Backlog items for these are
+**client-side conventions**, not enforced rules (see comments in `export_issues.md`).
+
+- Never present such a feature as secure or enforced in code, comments or UI text.
+- The **envelope format** (structured events inside `text`) is **not defined yet**.
+  Do not invent one. It needs an ADR (`docs/adr/adr-003_...`) written by the team first.
+- Reference the issue number in your summary and commit message.
+- Real push notifications are not possible with this API. Do not add push libraries.
+
+## Testing
+
+- There is no test framework yet. Do not add one without asking.
+- Once one exists: pure logic (parsing, formatting, envelopes) must have unit tests.
+
+## Known deviations (do not copy these)
+
+- `confirm-dialog.tsx`: hardcoded `rgba(...)` and numeric sizes
+- `login.tsx` / `register.tsx`: `KeyboardAvoidingView` with inline `style`; placeholder `onSubmitEditing={() => undefined}`
+- `profile.tsx`: `logout()` / `deregister()` not awaited, placeholder "test" button
+- `index.tsx`: no auth guard, so unauthenticated users can open the main screen
+
+## Summary format for every task
+
+```text
+Goal: <1 line, issue # if any>
+Changed: <files + 1 line each>
+Why this way: <key decisions, alternatives rejected>
+New concepts: <anything new the team should learn, with doc link>
+Verified: tsc <ok/fail>, lint <ok/fail>, manual test <what/where>
+Not done / open questions: <...>
+```

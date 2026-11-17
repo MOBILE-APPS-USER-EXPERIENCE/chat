@@ -28,3 +28,9 @@ npx expo lint
 
 Die Routen liegen unter `src/app`. Die Authentifizierung ist unter `src/app/(auth)` organisiert;
 API-Zugriffe befinden sich in `src/api`.
+
+## Mitarbeit & KI-Nutzung
+
+- Regeln für Menschen und KI-Agenten: [`AGENTS.md`](AGENTS.md)
+- Architekturentscheidungen: `docs/adr/`
+- Dokumentation KI-gestützter Entwürfe: `docs/ai-use/`

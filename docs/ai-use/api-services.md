@@ -18,6 +18,12 @@
 
 - Persistent state for token, admin key, and base URL via `AsyncStorage`, ensuring login status, admin mode, and server configuration persist across application restarts
 
+- **Server selection:** On startup the default server is pinged (3 s timeout). If it does not answer with `Pong`, the backup server is used. A user-defined server stored in AsyncStorage takes precedence.
+
+- **Access header:** `X-Access-Token` (from `EXPO_PUBLIC_X_ACCESS_TOKEN`) is sent only to the default server. Because `EXPO_PUBLIC_*` values end up in the client bundle, it is not a secret.
+
+- `unlockAdmin()` only stores the admin key. It is validated by the server on the first admin call (error 459 resets it).
+
 2. **Business Services**, one file per domain, all built on top of the core client:
 
 - `authService.ts` (register, login, logout, deregister, validateToken, unlock admin key)
@@ -30,7 +36,9 @@
 
 - `userService.ts` (getProfiles)
 
-- `serverService.ts` (ping)
+- `connectivityService.ts` (ping)
+
+- `serverSettings.ts` (getCurrentServer, changeServer, resetServerToDefault)
 
 - `adminService.ts` (resetUser, deleteUser, clear) including automatic reset of the admin key if the key is invalid (error code 459)
 
