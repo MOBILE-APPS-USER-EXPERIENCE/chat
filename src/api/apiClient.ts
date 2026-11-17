@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEFAULT_BASE_URL = 'https://www2.hs-esslingen.de/~chkohl/chat';
+const BACKUP_BASE_URL = 'https://api.chat.throin.de';
 
 const BASE_URL_KEY = 'chat.baseUrl';
 const TOKEN_KEY = 'chat.token';
 const ADMIN_KEY_KEY = 'chat.adminKey';
+const X_ACCESS_TOKEN = 'token';
+const DEFAULT_BASE_URL_PING_TIMEOUT_MS = 3000;
 
 export class ApiError extends Error {
     constructor(public code: number, message: string) {
@@ -16,7 +19,7 @@ export class ApiError extends Error {
 let baseUrl: string = DEFAULT_BASE_URL;
 let token: string | undefined;
 let adminKey: string | undefined;
-let initialized = false;
+let initPromise: Promise<void> | undefined;
 
 function normalizeBaseUrl(url: string): string {
     let normalized = url.trim();
@@ -24,21 +27,45 @@ function normalizeBaseUrl(url: string): string {
     return normalized;
 }
 
-async function ensureInitialized() {
-    if (initialized) return;
-    const [storedBaseUrl, storedToken, storedAdminKey] = await Promise.all([
-        AsyncStorage.getItem(BASE_URL_KEY),
-        AsyncStorage.getItem(TOKEN_KEY),
-        AsyncStorage.getItem(ADMIN_KEY_KEY),
-    ]);
-    baseUrl = storedBaseUrl ? normalizeBaseUrl(storedBaseUrl) : DEFAULT_BASE_URL;
-    token = storedToken ?? undefined;
-    adminKey = storedAdminKey ?? undefined;
-    initialized = true;
+async function getDefaultBaseUrl(): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DEFAULT_BASE_URL_PING_TIMEOUT_MS);
+
+    try {
+        const res = await fetch(`${DEFAULT_BASE_URL}/?request=ping`, {
+            headers: { 'X-Access-Token': X_ACCESS_TOKEN },
+            signal: controller.signal,
+        });
+        const json = await res.json();
+        return json.code === 200 && json.message === 'Pong'
+            ? DEFAULT_BASE_URL
+            : BACKUP_BASE_URL;
+    } catch (error) {
+        console.error('Default base URL unreachable:', error);
+        return BACKUP_BASE_URL;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+export function initApiClient(): Promise<void> {
+    initPromise ??= (async () => {
+        const [storedBaseUrl, storedToken, storedAdminKey] = await Promise.all([
+            AsyncStorage.getItem(BASE_URL_KEY),
+            AsyncStorage.getItem(TOKEN_KEY),
+            AsyncStorage.getItem(ADMIN_KEY_KEY),
+        ]);
+        baseUrl = storedBaseUrl && storedBaseUrl !== DEFAULT_BASE_URL
+            ? normalizeBaseUrl(storedBaseUrl)
+            : await getDefaultBaseUrl();
+        token = storedToken ?? undefined;
+        adminKey = storedAdminKey ?? undefined;
+    })();
+    return initPromise;
 }
 
 export async function getBaseUrl(): Promise<string> {
-    await ensureInitialized();
+    await initApiClient();
     return baseUrl;
 }
 
@@ -70,7 +97,6 @@ export async function request<T extends StatusResponse>(
     params: Record<string, string | number | boolean | undefined> = {},
     options: { includeToken?: boolean; includeAdminKey?: boolean; } = {},
 ): Promise<T> {
-    await ensureInitialized();
 
     const { includeToken = true, includeAdminKey = false } = options;
     const query = new URLSearchParams({ request: command });
@@ -82,7 +108,9 @@ export async function request<T extends StatusResponse>(
         if (value !== undefined) query.append(key, String(value));
     }
 
-    const response = await fetch(`${baseUrl}/?${query.toString()}`);
+    const response = await fetch(`${baseUrl}/?${query.toString()}`, {
+        headers: { ...getHeaders() },
+    });
     const json = (await response.json()) as T;
 
     if (json.status === 'error') {
@@ -95,12 +123,14 @@ export async function postRequest<T extends StatusResponse>(
     command: string,
     body: Record<string, unknown>,
 ): Promise<T> {
-    await ensureInitialized();
 
     const payload = { request: command, token, ...body };
     const response = await fetch(`${baseUrl}/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...getHeaders(),
+        },
         body: JSON.stringify(payload),
     });
 
@@ -121,7 +151,6 @@ export async function requestBinary(
     command: string,
     params: Record<string, string | number | boolean | undefined> = {},
 ): Promise<BinaryResult> {
-    await ensureInitialized();
 
     const query = new URLSearchParams({ request: command });
     if (token) query.append('token', token);
@@ -129,7 +158,9 @@ export async function requestBinary(
         if (value !== undefined) query.append(key, String(value));
     }
 
-    const response = await fetch(`${baseUrl}/?${query.toString()}`);
+    const response = await fetch(`${baseUrl}/?${query.toString()}`, {
+        headers: { ...getHeaders() },
+    });
     const contentType = response.headers.get('content-type');
 
     // If the response is JSON it gets parsed and an ApiError is thrown, otherwise the binary data is returned.
@@ -143,4 +174,13 @@ export async function requestBinary(
         contentType,
         contentDisposition: response.headers.get('content-disposition'),
     };
+}
+
+function getHeaders(): Record<string, string> {
+    if (X_ACCESS_TOKEN.length < 5) {
+        console.warn('Are you sure you set the correct X_ACCESS_TOKEN in apiClient.ts?');
+    }
+    return baseUrl === DEFAULT_BASE_URL
+        ? { 'X-Access-Token': X_ACCESS_TOKEN }
+        : {};
 }

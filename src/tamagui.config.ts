@@ -1,4 +1,5 @@
 import { defaultConfig } from '@tamagui/config/v6'
+import { animationsCSS } from '@tamagui/config/animations-css'
 import { createFont, createTamagui, isWeb } from 'tamagui'
 
 const systemFont = createFont({
@@ -37,6 +38,7 @@ const brandThemes = {
 
 export const tamaguiConfig = createTamagui({
     ...defaultConfig,
+    animations: animationsCSS,
     fonts: {
         ...defaultConfig.fonts,
         body: systemFont,
