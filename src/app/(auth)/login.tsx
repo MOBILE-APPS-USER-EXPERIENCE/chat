@@ -1,23 +1,13 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { H2, Text, YStack } from 'tamagui';
+import { Button, Form, H2, Input, Label, ScrollView, Spinner, Text, YStack } from 'tamagui';
 
 import { login } from '@/api/authService';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 
 export default function LoginScreen() {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [userid, setUserid] = useState('');
   const [password, setPassword] = useState('');
@@ -42,133 +32,88 @@ export default function LoginScreen() {
     }
   }
 
-  const inputStyle = [styles.input, { color: theme.text, borderColor: theme.backgroundSelected }];
-
   return (
     <YStack flex={1} backgroundColor="background">
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardAvoidingView}>
+        behavior="padding"
+        style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingTop: insets.top + Spacing.five,
-              paddingBottom: insets.bottom + BottomTabInset + Spacing.four,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled">
-          <H2>Login</H2>
-          <Text color="textSecondary" style={styles.description}>
-            Melde dich bei deinem Chat-Konto an.
-          </Text>
-
-          <Text style={styles.label}>Hochschul-ID</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="username"
-            editable={!isSubmitting}
-            onChangeText={setUserid}
-            placeholder="z. B. abcdit01"
-            placeholderTextColor={theme.textSecondary}
-            style={inputStyle}
-            value={userid}
-          />
-
-          <Text style={styles.label}>Passwort</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="current-password"
-            editable={!isSubmitting}
-            onChangeText={setPassword}
-            onSubmitEditing={handleLogin}
-            placeholder="Passwort"
-            placeholderTextColor={theme.textSecondary}
-            returnKeyType="done"
-            secureTextEntry
-            style={inputStyle}
-            value={password}
-          />
-
-          {!!error && (
-            <Text color="error" style={styles.error}>
-              {error}
+          keyboardShouldPersistTaps="handled"
+          px={Spacing.four}
+          pt={insets.top + Spacing.five}
+          pb={insets.bottom + BottomTabInset + Spacing.four}>
+          <Form onSubmit={() => void handleLogin()}>
+            <YStack self="center" gap={Spacing.two} w="100%">
+            <H2>Login</H2>
+            <Text color="textSecondary" mb={Spacing.two}>
+              Melde dich bei deinem Chat-Konto an.
             </Text>
-          )}
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={isSubmitting}
-            onPress={handleLogin}
-            style={({ pressed }) => [
-              styles.button,
-              { backgroundColor: theme.text },
-              pressed && styles.pressed,
-              isSubmitting && styles.disabled,
-            ]}>
-            {isSubmitting ? (
-              <ActivityIndicator color={theme.background} />
-            ) : (
-              <Text color="background">Einloggen</Text>
-            )}
-          </Pressable>
+            <YStack gap={Spacing.one}>
+              <Label htmlFor="login-userid">Hochschul-ID</Label>
+              <Input
+                id="login-userid"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="username"
+                textContentType="username"
+                disabled={isSubmitting}
+                onChangeText={setUserid}
+                placeholder="z. B. abcdit01"
+                value={userid}
+                borderColor="backgroundSelected"
+                color="text"
+                h={48}
+                px={Spacing.three}
+              />
+            </YStack>
 
-          <Pressable accessibilityRole="link" onPress={() => router.replace('/register')}>
-            <Text color="accent" fontSize={14} lineHeight={30} style={styles.switchLink}>
+            <YStack gap={Spacing.one}>
+              <Label htmlFor="login-password">Passwort</Label>
+              <Input
+                id="login-password"
+                autoCapitalize="none"
+                autoComplete="current-password"
+                textContentType="password"
+                disabled={isSubmitting}
+                onChangeText={setPassword}
+                onSubmitEditing={handleLogin}
+                placeholder="Passwort"
+                returnKeyType="done"
+                secureTextEntry
+                value={password}
+                borderColor="backgroundSelected"
+                color="text"
+                h={48}
+                px={Spacing.three}
+              />
+            </YStack>
+
+            {!!error && <Text color="error" mt={Spacing.one}>{error}</Text>}
+
+            <Form.Trigger asChild>
+              <Button
+                disabled={isSubmitting}
+                backgroundColor="text"
+                color="background"
+                mt={Spacing.two}
+                h={48}>
+                {isSubmitting ? <Spinner color="background" /> : 'Einloggen'}
+              </Button>
+            </Form.Trigger>
+
+            <Button
+              variant="quiet"
+              color="accent"
+              fontSize={14}
+              lineHeight={30}
+              onPress={() => router.replace('/register')}>
               Noch kein Konto? Jetzt registrieren
-            </Text>
-          </Pressable>
+            </Button>
+            </YStack>
+          </Form>
         </ScrollView>
       </KeyboardAvoidingView>
     </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  content: {
-    alignSelf: 'center',
-    gap: Spacing.two,
-    maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.four,
-    width: '100%',
-  },
-  description: {
-    marginBottom: Spacing.two,
-  },
-  label: {
-    marginTop: Spacing.one,
-  },
-  input: {
-    borderRadius: Spacing.two,
-    borderWidth: 1,
-    fontSize: 16,
-    minHeight: 48,
-    paddingHorizontal: Spacing.three,
-  },
-  error: {
-    marginTop: Spacing.one,
-  },
-  button: {
-    alignItems: 'center',
-    borderRadius: Spacing.two,
-    justifyContent: 'center',
-    marginTop: Spacing.two,
-    minHeight: 48,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  switchLink: {
-    textAlign: 'center',
-  },
-});
