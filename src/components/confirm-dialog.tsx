@@ -1,8 +1,4 @@
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { Modal, StyleSheet, View } from 'react-native';
-
-import { Button, Host, Text } from '@expo/ui';
+import { AlertDialog, Button, Text, XStack, YStack } from 'tamagui';
 
 function ConfirmDialog({
     visible,
@@ -23,63 +19,51 @@ function ConfirmDialog({
     onConfirm: () => void;
     onCancel: () => void;
 }>) {
-    const theme = useTheme();
-
     return (
-        <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
-            <View style={styles.overlay}>
-                <View style={[styles.dialog, { backgroundColor: theme.background }]}>
-                    <Text>{title}</Text>
-                    <Text>{message}</Text>
+        <AlertDialog open={visible} onOpenChange={(open) => !open && onCancel()}>
+            <AlertDialog.Portal>
+                <AlertDialog.Overlay
+                    key="overlay"
+                    backgroundColor="rgba(0, 0, 0, 0.5)"
+                />
+                <AlertDialog.Content
+                    bordered
+                    elevate
+                    key="content"
+                    backgroundColor="background"
+                    gap={8}
+                    p={24}
+                    w="90%"
+                >
+                    <YStack gap={8}>
+                        <AlertDialog.Title asChild>
+                            <Text fontSize={24} fontWeight="600">{title}</Text>
+                        </AlertDialog.Title>
+                        <AlertDialog.Description asChild>
+                            <Text color="textSecondary">{message}</Text>
+                        </AlertDialog.Description>
+                    </YStack>
 
-                    <Host style={styles.actions}>
-                        <Button
-                            onPress={onCancel}>
-                            <Text>{cancelLabel}</Text>
-                        </Button>
-
-                        <Button
-                            onPress={onConfirm}>
-                            <Text>{confirmLabel}</Text>
-                        </Button>
-                    </Host>
-                </View>
-            </View>
-        </Modal>
+                    <XStack justify="flex-end" gap={8} mt={8}>
+                        <AlertDialog.Cancel asChild>
+                            <Button onPress={onCancel}>{cancelLabel}</Button>
+                        </AlertDialog.Cancel>
+                        {destructive ? (
+                            <AlertDialog.Destructive asChild>
+                                <Button backgroundColor="error" color="errorText" onPress={onConfirm}>
+                                    {confirmLabel}
+                                </Button>
+                            </AlertDialog.Destructive>
+                        ) : (
+                            <AlertDialog.Action asChild>
+                                <Button onPress={onConfirm}>{confirmLabel}</Button>
+                            </AlertDialog.Action>
+                        )}
+                    </XStack>
+                </AlertDialog.Content>
+            </AlertDialog.Portal>
+        </AlertDialog>
     );
 }
-
-const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: Spacing.four,
-    },
-    dialog: {
-        borderRadius: Spacing.two,
-        padding: Spacing.four,
-        width: '100%',
-        maxWidth: 400,
-        gap: Spacing.two,
-    },
-    actions: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        gap: Spacing.two,
-        marginTop: Spacing.two,
-    },
-    button: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: Spacing.two,
-        paddingHorizontal: Spacing.three,
-        minHeight: 44,
-    },
-    pressed: {
-        opacity: 0.7,
-    },
-});
 
 export default ConfirmDialog;

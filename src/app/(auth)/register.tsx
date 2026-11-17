@@ -10,10 +10,9 @@ import {
   TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { H2, Text, YStack } from 'tamagui';
 
 import { register } from '@/api/authService';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -48,7 +47,7 @@ export default function RegisterScreen() {
   const inputStyle = [styles.input, { color: theme.text, borderColor: theme.backgroundSelected }];
 
   return (
-    <ThemedView style={styles.container}>
+    <YStack flex={1} backgroundColor="background">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoidingView}>
@@ -61,12 +60,12 @@ export default function RegisterScreen() {
             },
           ]}
           keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">Registrieren</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.description}>
+          <H2>Registrieren</H2>
+          <Text color="textSecondary" style={styles.description}>
             Erstelle dein Konto für den Chat.
-          </ThemedText>
+          </Text>
 
-          <ThemedText style={styles.label}>Hochschul-ID</ThemedText>
+          <Text style={styles.label}>Hochschul-ID</Text>
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
@@ -79,7 +78,7 @@ export default function RegisterScreen() {
             value={userid}
           />
 
-          <ThemedText style={styles.label}>Passwort</ThemedText>
+          <Text style={styles.label}>Passwort</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="new-password"
@@ -93,7 +92,7 @@ export default function RegisterScreen() {
             value={password}
           />
 
-          <ThemedText style={styles.label}>Spitzname</ThemedText>
+          <Text style={styles.label}>Spitzname</Text>
           <TextInput
             editable={!isSubmitting}
             onChangeText={setNickname}
@@ -103,7 +102,7 @@ export default function RegisterScreen() {
             value={nickname}
           />
 
-          <ThemedText style={styles.label}>Vollständiger Name</ThemedText>
+          <Text style={styles.label}>Vollständiger Name</Text>
           <TextInput
             editable={!isSubmitting}
             onChangeText={setFullname}
@@ -116,9 +115,9 @@ export default function RegisterScreen() {
           />
 
           {!!(error) && (
-            <ThemedText themeColor="error" style={styles.error}>
+            <Text color="error" style={styles.error}>
               {error}
-            </ThemedText>
+            </Text>
           )}
 
           <Pressable
@@ -134,17 +133,17 @@ export default function RegisterScreen() {
             {isSubmitting ? (
               <ActivityIndicator color={theme.background} />
             ) : (
-              <ThemedText style={{ color: theme.background }}>Konto erstellen</ThemedText>
+              <Text color="background">Konto erstellen</Text>
             )}
           </Pressable>
           <Pressable accessibilityRole="link" onPress={() => router.replace('/login')}>
-            <ThemedText type="linkPrimary" style={styles.switchLink}>
+            <Text color="accent" fontSize={14} lineHeight={30} style={styles.switchLink}>
               Bereits registriert? Zum Login
-            </ThemedText>
+            </Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ThemedView>
+    </YStack>
   );
 }
 

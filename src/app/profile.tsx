@@ -1,15 +1,8 @@
-import { StyleSheet } from 'react-native';
-
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-
 import { deregister, logout } from '@/api/authService';
 import ConfirmDialog from '@/components/confirm-dialog';
 import { router } from 'expo-router';
 import { useState } from 'react';
-
-import { ThemedButton } from '@/components/themed-button/themed-button';
-import { Button, Host, Text } from '@expo/ui';
+import { Button, H2, YStack } from 'tamagui';
 
 
 function handleLogout() {
@@ -27,39 +20,26 @@ export default function ProfileScreen() {
     }
 
     return (
-        <ThemedView style={styles.container}>
-            <Host>
-                <ThemedText type="subtitle">Profil</ThemedText>
+        <YStack flex={1} items="center" justify="center" gap={8} backgroundColor="background">
+            <H2>Profil</H2>
 
-                <Button
-                    onPress={handleLogout}>
-                    <Text>Logout</Text>
-                </Button>
+            <Button onPress={handleLogout}>Logout</Button>
 
-                <ThemedButton title="test" onPress={() => void 0}></ThemedButton>
+            <Button onPress={() => void 0}>test</Button>
 
-                <ThemedButton
-                    title="Account löschen"
-                    onPress={() => setDialogVisible(true)}
-                    style="destructive"
-                />
-                <ConfirmDialog
-                    visible={dialogVisible}
-                    title="Account löschen"
-                    message="Bist du sicher?"
-                    onConfirm={confirmDeleteAccount}
-                    onCancel={() => setDialogVisible(false)}
-                />
-
-            </Host>
-        </ThemedView>
+            <Button
+                backgroundColor="error"
+                color="errorText"
+                onPress={() => setDialogVisible(true)}>
+                Account löschen
+            </Button>
+            <ConfirmDialog
+                visible={dialogVisible}
+                title="Account löschen"
+                message="Bist du sicher?"
+                onConfirm={confirmDeleteAccount}
+                onCancel={() => setDialogVisible(false)}
+            />
+        </YStack>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-});

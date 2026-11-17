@@ -10,10 +10,9 @@ import {
   TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { H2, Text, YStack } from 'tamagui';
 
 import { login } from '@/api/authService';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -46,7 +45,7 @@ export default function LoginScreen() {
   const inputStyle = [styles.input, { color: theme.text, borderColor: theme.backgroundSelected }];
 
   return (
-    <ThemedView style={styles.container}>
+    <YStack flex={1} backgroundColor="background">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoidingView}>
@@ -59,12 +58,12 @@ export default function LoginScreen() {
             },
           ]}
           keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">Login</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.description}>
+          <H2>Login</H2>
+          <Text color="textSecondary" style={styles.description}>
             Melde dich bei deinem Chat-Konto an.
-          </ThemedText>
+          </Text>
 
-          <ThemedText style={styles.label}>Hochschul-ID</ThemedText>
+          <Text style={styles.label}>Hochschul-ID</Text>
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
@@ -77,7 +76,7 @@ export default function LoginScreen() {
             value={userid}
           />
 
-          <ThemedText style={styles.label}>Passwort</ThemedText>
+          <Text style={styles.label}>Passwort</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="current-password"
@@ -93,9 +92,9 @@ export default function LoginScreen() {
           />
 
           {!!error && (
-            <ThemedText themeColor="error" style={styles.error}>
+            <Text color="error" style={styles.error}>
               {error}
-            </ThemedText>
+            </Text>
           )}
 
           <Pressable
@@ -111,18 +110,18 @@ export default function LoginScreen() {
             {isSubmitting ? (
               <ActivityIndicator color={theme.background} />
             ) : (
-              <ThemedText style={{ color: theme.background }}>Einloggen</ThemedText>
+              <Text color="background">Einloggen</Text>
             )}
           </Pressable>
 
           <Pressable accessibilityRole="link" onPress={() => router.replace('/register')}>
-            <ThemedText type="linkPrimary" style={styles.switchLink}>
+            <Text color="accent" fontSize={14} lineHeight={30} style={styles.switchLink}>
               Noch kein Konto? Jetzt registrieren
-            </ThemedText>
+            </Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ThemedView>
+    </YStack>
   );
 }
 
