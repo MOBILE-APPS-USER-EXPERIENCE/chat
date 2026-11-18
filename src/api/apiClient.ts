@@ -1,14 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const DEFAULT_BASE_URL = 'https://www2.hs-esslingen.de/~chkohl/chat';
-const BACKUP_BASE_URL = 'https://api.chat.throin.de';
-
-const BASE_URL_KEY = 'chat.baseUrl';
-const TOKEN_KEY = 'chat.token';
-const ADMIN_KEY_KEY = 'chat.adminKey';
-const X_ACCESS_TOKEN = process.env.EXPO_PUBLIC_X_ACCESS_TOKEN ?? '';
-const DEFAULT_BASE_URL_PING_TIMEOUT_MS = 3000;
-
 export class ApiError extends Error {
     constructor(public code: number, message: string) {
         super(message);
@@ -16,130 +5,34 @@ export class ApiError extends Error {
     }
 }
 
-let baseUrl: string = DEFAULT_BASE_URL;
-let token: string | undefined;
-let adminKey: string | undefined;
-let initPromise: Promise<void> | undefined;
-
-function normalizeBaseUrl(url: string): string {
-    let normalized = url.trim();
-    while (normalized.endsWith('/')) normalized = normalized.slice(0, -1);
-    return normalized;
-}
-
-async function getDefaultBaseUrl(): Promise<string> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DEFAULT_BASE_URL_PING_TIMEOUT_MS);
-
-    try {
-        const res = await fetch(`${DEFAULT_BASE_URL}/?request=ping`, {
-            headers: { 'X-Access-Token': X_ACCESS_TOKEN },
-            signal: controller.signal,
-        });
-        const json = await res.json();
-        return json.code === 200 && json.message === 'Pong'
-            ? DEFAULT_BASE_URL
-            : BACKUP_BASE_URL;
-    } catch (error) {
-        console.error('Default base URL unreachable:', error);
-        return BACKUP_BASE_URL;
-    } finally {
-        clearTimeout(timeout);
+export class NoApiContextError extends Error {
+    constructor(message = 'No API context available') {
+        super(message);
+        this.name = 'NoApiContextError';
     }
 }
 
-export function initApiClient(): Promise<void> {
-    initPromise ??= (async () => {
-        const [storedBaseUrl, storedToken, storedAdminKey] = await Promise.all([
-            AsyncStorage.getItem(BASE_URL_KEY),
-            AsyncStorage.getItem(TOKEN_KEY),
-            AsyncStorage.getItem(ADMIN_KEY_KEY),
-        ]);
-        baseUrl = storedBaseUrl && storedBaseUrl !== DEFAULT_BASE_URL
-            ? normalizeBaseUrl(storedBaseUrl)
-            : await getDefaultBaseUrl();
-        token = storedToken ?? undefined;
-        adminKey = storedAdminKey ?? undefined;
-    })();
-    return initPromise;
-}
-
-export async function getBaseUrl(): Promise<string> {
-    await initApiClient();
-    return baseUrl;
-}
-
-export async function setBaseUrl(url: string | undefined): Promise<void> {
-    baseUrl = url ? normalizeBaseUrl(url) : DEFAULT_BASE_URL;
-    if (url) await AsyncStorage.setItem(BASE_URL_KEY, baseUrl);
-    else await AsyncStorage.removeItem(BASE_URL_KEY);
-}
-
-export async function setToken(value: string | undefined) {
-    token = value;
-    if (value) await AsyncStorage.setItem(TOKEN_KEY, value);
-    else await AsyncStorage.removeItem(TOKEN_KEY);
-}
-
-export async function setAdminKey(value: string | undefined) {
-    adminKey = value;
-    if (value) await AsyncStorage.setItem(ADMIN_KEY_KEY, value);
-    else await AsyncStorage.removeItem(ADMIN_KEY_KEY);
-}
-
-export function getToken() { return token; }
-export function getAdminKey() { return adminKey; }
-
-type StatusResponse = { status: 'ok' | 'error'; message?: string; code: number; };
-
-export async function request<T extends StatusResponse>(
-    command: string,
-    params: Record<string, string | number | boolean | undefined> = {},
-    options: { includeToken?: boolean; includeAdminKey?: boolean; } = {},
-): Promise<T> {
-
-    const { includeToken = true, includeAdminKey = false } = options;
-    const query = new URLSearchParams({ request: command });
-
-    if (includeToken && token) query.append('token', token);
-    if (includeAdminKey && adminKey) query.append('key', adminKey);
-
-    for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined) query.append(key, String(value));
+/** fetch failed or timed out. The message is generic and never contains URL, token or key. */
+export class NetworkError extends Error {
+    constructor(message = 'Network request failed') {
+        super(message);
+        this.name = 'NetworkError';
     }
-
-    const response = await fetch(`${baseUrl}/?${query.toString()}`, {
-        headers: { ...getHeaders() },
-    });
-    const json = (await response.json()) as T;
-
-    if (json.status === 'error') {
-        throw new ApiError(json.code, json.message ?? 'Unknown error');
-    }
-    return json;
 }
 
-export async function postRequest<T extends StatusResponse>(
-    command: string,
-    body: Record<string, unknown>,
-): Promise<T> {
+export type ApiContext = {
+    baseUrl: string;
+    token?: string;
+    adminKey?: string;
+    headers?: Record<string, string>;
+};
 
-    const payload = { request: command, token, ...body };
-    const response = await fetch(`${baseUrl}/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...getHeaders(),
-        },
-        body: JSON.stringify(payload),
-    });
-
-    const json = (await response.json()) as T;
-    if (json.status === 'error') {
-        throw new ApiError(json.code, json.message ?? 'Unknown error');
-    }
-    return json;
-}
+export type RequestOptions = {
+    includeToken?: boolean;               // default true
+    includeAdminKey?: boolean;            // default false
+    context?: ApiContext;                 // default: the active context
+    timeoutMs?: number;                   // default: none
+};
 
 export type BinaryResult = {
     blob: Blob;
@@ -147,40 +40,151 @@ export type BinaryResult = {
     contentDisposition: string | null;
 };
 
-export async function requestBinary(
-    command: string,
-    params: Record<string, string | number | boolean | undefined> = {},
-): Promise<BinaryResult> {
+type Params = Record<string, string | number | boolean | undefined>;
+type StatusResponse = { status: 'ok' | 'error'; message?: string; code: number; };
+type BodyOptions = Pick<RequestOptions, 'context' | 'timeoutMs'>;
 
+const INVALID_RESPONSE = 'Invalid server response';
+
+// Plain module state, no storage: the session layer decides what is active.
+let activeContext: ApiContext | null = null;
+
+
+function freezeContext(context: ApiContext): ApiContext {
+    const copy: ApiContext = { baseUrl: context.baseUrl };
+    if (context.token !== undefined) copy.token = context.token;
+    if (context.adminKey !== undefined) copy.adminKey = context.adminKey;
+    if (context.headers !== undefined) copy.headers = Object.freeze({ ...context.headers });
+    return Object.freeze(copy);
+}
+
+export function setActiveContext(context: ApiContext | null): void {
+    activeContext = context ? freezeContext(context) : null;
+}
+
+export function getActiveContext(): ApiContext | null {
+    return activeContext;
+}
+
+function resolveContext(context: ApiContext | undefined): ApiContext {
+    const resolved = context ?? activeContext;
+    if (!resolved) throw new NoApiContextError();
+    return resolved;
+}
+
+function trimTrailingSlashes(url: string): string {
+    let end = url.length;
+    while (end > 0 && url.charAt(end - 1) === '/') end--;
+    return url.slice(0, end);
+}
+
+function buildGetUrl(
+    ctx: ApiContext, command: string, params: Params, includeToken: boolean, includeAdminKey: boolean,
+): string {
     const query = new URLSearchParams({ request: command });
-    if (token) query.append('token', token);
+    if (includeToken && ctx.token) query.append('token', ctx.token);
+    if (includeAdminKey && ctx.adminKey) query.append('key', ctx.adminKey);
     for (const [key, value] of Object.entries(params)) {
         if (value !== undefined) query.append(key, String(value));
     }
-
-    const response = await fetch(`${baseUrl}/?${query.toString()}`, {
-        headers: { ...getHeaders() },
-    });
-    const contentType = response.headers.get('content-type');
-
-    // If the response is JSON it gets parsed and an ApiError is thrown, otherwise the binary data is returned.
-    if (contentType?.includes('application/json')) {
-        const json = await response.json();
-        throw new ApiError(json.code, json.message ?? 'Unknown error');
-    }
-
-    return {
-        blob: await response.blob(),
-        contentType,
-        contentDisposition: response.headers.get('content-disposition'),
-    };
+    return `${trimTrailingSlashes(ctx.baseUrl)}/?${query.toString()}`;
 }
 
-function getHeaders(): Record<string, string> {
-    if (X_ACCESS_TOKEN.length < 5) {
-        console.warn('Are you sure you set the correct X_ACCESS_TOKEN in apiClient.ts?');
+/** fetch + body handling under one optional timeout. The timer is always cleared. */
+async function execute<R>(
+    url: string,
+    init: RequestInit,
+    timeoutMs: number | undefined,
+    handle: (response: Response) => Promise<R>,
+): Promise<R> {
+    const controller = timeoutMs === undefined ? undefined : new AbortController();
+    const timer = controller === undefined ? undefined : setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        let response: Response;
+        try {
+            response = await fetch(url, controller ? { ...init, signal: controller.signal } : init);
+        } catch {
+            // The original error is dropped on purpose: its message can contain the URL (and the token).
+            throw new NetworkError(controller?.signal.aborted ? 'Request timed out' : 'Network request failed');
+        }
+        return await handle(response);
+    } finally {
+        if (timer !== undefined) clearTimeout(timer);
     }
-    return baseUrl === DEFAULT_BASE_URL
-        ? { 'X-Access-Token': X_ACCESS_TOKEN }
-        : {};
+}
+
+async function readJson(response: Response): Promise<StatusResponse> {
+    let text: string;
+    try {
+        text = await response.text();
+    } catch {
+        throw new NetworkError();
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(text);
+    } catch {
+        throw new ApiError(response.status, INVALID_RESPONSE);
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new ApiError(response.status, INVALID_RESPONSE);
+    }
+    return parsed as StatusResponse;
+}
+
+function throwApiError(json: StatusResponse): never {
+    throw new ApiError(json.code, json.message ?? 'Unknown error');
+}
+
+async function readApiJson<T extends StatusResponse>(response: Response): Promise<T> {
+    const json = await readJson(response);
+    if (json.status === 'error') throwApiError(json);
+    return json as T;
+}
+
+
+export async function request<T extends StatusResponse>(
+    command: string,
+    params: Params = {},
+    options: RequestOptions = {},
+): Promise<T> {
+    const { includeToken = true, includeAdminKey = false, context, timeoutMs } = options;
+    const ctx = resolveContext(context);
+    const url = buildGetUrl(ctx, command, params, includeToken, includeAdminKey);
+    return execute(url, { headers: { ...ctx.headers } }, timeoutMs, (response) => readApiJson<T>(response));
+}
+
+export async function postRequest<T extends StatusResponse>(
+    command: string,
+    body: Record<string, unknown>,
+    options: BodyOptions = {},
+): Promise<T> {
+    const ctx = resolveContext(options.context);
+    const init: RequestInit = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...ctx.headers },
+        body: JSON.stringify({ request: command, token: ctx.token, ...body }),
+    };
+    return execute(`${trimTrailingSlashes(ctx.baseUrl)}/`, init, options.timeoutMs, (response) => readApiJson<T>(response));
+}
+
+export async function requestBinary(
+    command: string,
+    params: Params = {},
+    options: BodyOptions = {},
+): Promise<BinaryResult> {
+    const ctx = resolveContext(options.context);
+    const url = buildGetUrl(ctx, command, params, true, false);
+    return execute(url, { headers: { ...ctx.headers } }, options.timeoutMs, async (response) => {
+        const contentType = response.headers.get('content-type');
+        // A JSON body on a binary endpoint is an error response.
+        if (contentType?.includes('application/json')) throwApiError(await readJson(response));
+        let blob: Blob;
+        try {
+            blob = await response.blob();
+        } catch {
+            throw new NetworkError();
+        }
+        return { blob, contentType, contentDisposition: response.headers.get('content-disposition') };
+    });
 }

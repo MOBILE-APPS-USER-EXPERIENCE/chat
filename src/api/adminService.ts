@@ -1,24 +1,16 @@
-import { ApiError, request, setAdminKey } from './apiClient';
+import { request } from './apiClient';
 
-async function withAdminFallback<T>(fn: () => Promise<T>): Promise<T> {
-    try {
-        return await fn();
-    } catch (e) {
-        if (e instanceof ApiError && e.code === 459) await setAdminKey(undefined);
-        throw e;
-    }
-}
+// An invalid admin key answers with ApiError code 459. The API layer holds no state, so the
+// caller (session layer / UI) reacts to it with `session.lockAdmin()`.
 
 export async function resetUser(userhash: string): Promise<void> {
-    await withAdminFallback(() => request('resetuser', { userhash }, { includeAdminKey: true }));
+    await request('resetuser', { userhash }, { includeAdminKey: true });
 }
 
 export async function deleteUser(userhash: string): Promise<void> {
-    await withAdminFallback(() => request('deleteuser', { userhash }, { includeAdminKey: true }));
+    await request('deleteuser', { userhash }, { includeAdminKey: true });
 }
 
 export async function clearAllData(): Promise<void> {
-    await withAdminFallback(() =>
-        request('clear', {}, { includeToken: false, includeAdminKey: true }),
-    );
+    await request('clear', {}, { includeToken: false, includeAdminKey: true });
 }

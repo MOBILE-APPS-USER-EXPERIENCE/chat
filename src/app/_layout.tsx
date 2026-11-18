@@ -1,39 +1,50 @@
 import { DarkTheme, DefaultTheme, SplashScreen, Stack, ThemeProvider } from 'expo-router';
-import { TamaguiProvider } from 'tamagui';
+import { TamaguiProvider, Text, YStack } from 'tamagui';
 
-import { initApiClient } from '@/api/apiClient';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Spacing } from '@/constants/layout';
 import '@/global.css';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { session, useSession } from '@/session';
 import { useEffect, useState } from 'react';
 import { tamaguiConfig } from '../tamagui.config';
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
+  const [initFailed, setInitFailed] = useState(false);
   const colorScheme = useColorScheme();
+  const state = useSession();
 
   const theme = colorScheme === 'dark' ? 'dark' : 'light';
 
   useEffect(() => {
-    initApiClient()
-      .catch(console.error)
-      .finally(() => {
-        setReady(true);
-        void SplashScreen.hideAsync();
-      });
+    session.init()
+      .catch(() => setInitFailed(true))
+      .finally(() => { void SplashScreen.hideAsync(); });
   }, []);
 
-  if (!ready) return null;
+  if (state.status === 'initializing' && !initFailed) return null;
+  const signedIn = state.status === 'signed_in';
+
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme={theme}>
       <ThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack
-          screenOptions={{
-            headerShown: true,
-            headerBackTitle: '',
-          }}
-        />
+        {initFailed ? (
+          <YStack flex={1} items="center" justify="center" px={Spacing.four} backgroundColor="background">
+            <Text color="error">Lokale Daten konnten nicht geladen werden. Bitte starte die App neu.</Text>
+          </YStack>
+        ) : (
+          <Stack screenOptions={{ headerShown: true, headerBackTitle: '' }}>
+            <Stack.Protected guard={signedIn}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="profile" />
+            </Stack.Protected>
+            <Stack.Protected guard={!signedIn}>
+              <Stack.Screen name="(auth)/login" />
+              <Stack.Screen name="(auth)/register" />
+            </Stack.Protected>
+          </Stack>
+        )}
       </ThemeProvider>
     </TamaguiProvider>
   );

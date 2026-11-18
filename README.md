@@ -28,7 +28,8 @@ npm run lint
 ```
 
 Die Routen liegen unter `src/app`. Die Authentifizierung ist unter `src/app/(auth)` organisiert;
-API-Zugriffe befinden sich in `src/api`.
+`src/api` ist ein zustandsloser Client für den Chat-Server (keine Speicherung, kein Failover).
+Server, Konten und die Sitzung (Login, Logout, Wiederherstellung beim Start) verwaltet `src/session`.
 
 ## Mitarbeit & KI-Nutzung
 

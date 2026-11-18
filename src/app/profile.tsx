@@ -1,23 +1,32 @@
-import { deregister, logout } from '@/api/authService';
 import ConfirmDialog from '@/components/confirm-dialog';
-import { router } from 'expo-router';
+import { session } from '@/session';
+import { describeAuthError } from '@/utils/auth-error';
 import { useState } from 'react';
-import { Button, H2, YStack } from 'tamagui';
+import { Button, H2, Text, YStack } from 'tamagui';
 
 import { triggerPrimaryButtonHaptic } from '@/utils/primary-button-haptic';
 
-function handleLogout() {
-    logout();
-    router.replace('/(auth)/login');
-}
-
 export default function ProfileScreen() {
     const [dialogVisible, setDialogVisible] = useState(false);
+    const [error, setError] = useState<string>();
 
-    function confirmDeleteAccount() {
+    async function handleLogout() {
+        setError(undefined);
+        try {
+            await session.logout();
+        } catch (caughtError) {
+            setError(describeAuthError(caughtError, 'Logout fehlgeschlagen.'));
+        }
+    }
+
+    async function confirmDeleteAccount() {
         setDialogVisible(false);
-        deregister();
-        router.replace('/(auth)/login');
+        setError(undefined);
+        try {
+            await session.deregister();
+        } catch (caughtError) {
+            setError(describeAuthError(caughtError, 'Account konnte nicht gelöscht werden.'));
+        }
     }
 
     return (
@@ -27,7 +36,7 @@ export default function ProfileScreen() {
             <Button
                 onPress={() => {
                     triggerPrimaryButtonHaptic();
-                    handleLogout();
+                    void handleLogout();
                 }}>
                 Logout
             </Button>
@@ -43,11 +52,12 @@ export default function ProfileScreen() {
                 }}>
                 Account löschen
             </Button>
+            {!!error && <Text color="error">{error}</Text>}
             <ConfirmDialog
                 visible={dialogVisible}
                 title="Account löschen"
                 message="Bist du sicher?"
-                onConfirm={confirmDeleteAccount}
+                onConfirm={() => void confirmDeleteAccount()}
                 onCancel={() => setDialogVisible(false)}
             />
         </YStack>

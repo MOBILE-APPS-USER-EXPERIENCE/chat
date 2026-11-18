@@ -1,11 +1,11 @@
+import { Spacing } from '@/constants/layout';
+import { session } from '@/session';
+import { describeAuthError } from '@/utils/auth-error';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Form, H2, Input, Label, ScrollView, Spinner, Text, YStack } from 'tamagui';
-
-import { login } from '@/api/authService';
-import { Spacing } from '@/constants/layout';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -23,10 +23,9 @@ export default function LoginScreen() {
     setError(undefined);
     setIsSubmitting(true);
     try {
-      await login(userid.trim(), password);
-      router.replace('/');
+      await session.login(userid.trim(), password);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Login fehlgeschlagen.');
+      setError(describeAuthError(caughtError, 'Login fehlgeschlagen.'));
     } finally {
       setIsSubmitting(false);
     }

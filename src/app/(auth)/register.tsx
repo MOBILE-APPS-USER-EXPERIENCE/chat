@@ -1,11 +1,11 @@
+import { Spacing } from '@/constants/layout';
+import { session } from '@/session';
+import { describeAuthError } from '@/utils/auth-error';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Form, H2, Input, Label, ScrollView, Spinner, Text, YStack } from 'tamagui';
-
-import { register } from '@/api/authService';
-import { Spacing } from '@/constants/layout';
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
@@ -25,10 +25,9 @@ export default function RegisterScreen() {
     setError(undefined);
     setIsSubmitting(true);
     try {
-      await register(userid.trim(), password, nickname.trim(), fullname.trim());
-      router.replace('/');
+      await session.register(userid.trim(), password, nickname.trim(), fullname.trim());
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Registrierung fehlgeschlagen.');
+      setError(describeAuthError(caughtError, 'Registrierung fehlgeschlagen.'));
     } finally {
       setIsSubmitting(false);
     }
