@@ -35,20 +35,25 @@ This file is for AI agents **and** humans. Humans own every line that lands in t
 - Backend: one dispatch endpoint (`GET /?request=<cmd>`), errors are returned as HTTP
   status codes (451–469), no WebSocket and no push. The app polls (5 s).
   Details: `docs/ai-use/api-services.md`.
-- Server selection: default server is pinged; if unreachable the backup server is used.
-  The `X-Access-Token` header is only sent to the default server.
-- Today the API client still stores token, admin key and base URL in AsyncStorage (not
-  secure storage). They will be moved to `SecretStore` (`src/storage`) in the near future.
+- Server selection: explicit, no failover. The user picks a server; both defaults are seeded into
+  the registry on first start. The `X-Access-Token` header is only sent to the default server.
+- Secrets (token, admin key) live in the `SecretStore` (`src/storage/secret/`), never in AsyncStorage.
+  The registry holds only non-secret data.
 - Language: UI strings are German; identifiers, comments and commit messages are English.
 
 ## Repo map
 
-- `src/app/` – Expo Router screens only (`(auth)/login`, `(auth)/register`, `index`, `profile`)
+- `src/app/` – Expo Router screens only (`(auth)/login`, `(auth)/register`, `index`, `profile`).
+  `_layout.tsx` guards the routes with `Stack.Protected`.
 - `src/api/` – hand-written API client
-  - `apiClient.ts`: `request`, `postRequest`, `requestBinary`, `ApiError`, token/admin key/base URL state
+  - `apiClient.ts`: stateless `request`, `postRequest`, `requestBinary`, `ApiError`; the active
+    `ApiContext` is set by the session layer
   - `*Service.ts`: one file per domain (auth, chat, message, invite, user, admin, connectivity)
   - `serverSettings.ts`: change/reset server
   - `types.ts`: types derived by hand from `docs/openapi.yaml`
+- `src/session/` – servers, accounts, login/register/logout/deregister, session restore
+- `src/storage/` – ports, memory implementations, KV registry, `SecretStore`, and (in progress)
+  the SQLite account database under `src/storage/db/`
 - `src/components/` – reusable UI (e.g. `confirm-dialog.tsx`)
 - `src/constants/layout.ts` – `Spacing` scale
 - `src/hooks/`, `src/utils/` – hooks and helpers
@@ -93,7 +98,7 @@ Expo ships breaking changes every SDK release. Before touching an Expo/EAS/React
   matching `*Service.ts`. Keep types in sync with the spec.
 - Never log or display the token or admin key.
 - Error handling: catch `ApiError`, show `message`. Code 456 means invalid token (log in again);
-  459 means invalid admin key (already handled in `adminService.ts`).
+  459 means invalid admin key, which the caller handles with `session.lockAdmin()`.
 - If a change to `src/api/**` is AI-designed, add or update a short note in `docs/ai-use/`.
 
 ## UI rules (Tamagui)
@@ -122,21 +127,22 @@ sub-groups, write-protected (broadcast) chats, or push. Backlog items for these 
 
 - Never present such a feature as secure or enforced in code, comments or UI text.
 - The **envelope format** (structured events inside `text`) is **not defined yet**.
-  Do not invent one. It needs an ADR (`docs/adr/adr-003_...`) written by the team first.
+  Do not invent one. It needs an ADR with the next free ADR number in `docs/adr/`
+  (adr-003 and adr-004 are taken) written by the team first.
 - Reference the issue number in your summary and commit message.
 - Real push notifications are not possible with this API. Do not add push libraries.
 
 ## Testing
 
-- There is no test framework yet. Do not add one without asking.
-- Once one exists: pure logic (parsing, formatting, envelopes) must have unit tests.
+- Jest is set up (`npm test`, `jest-expo` preset, tests live next to the code as `*.test.ts`).
+  Do not add another framework without asking.
+- Pure logic (parsing, formatting, envelopes) must have unit tests.
 
 ## Known deviations (do not copy these)
 
 - `confirm-dialog.tsx`: hardcoded `rgba(...)` and numeric sizes
 - `login.tsx` / `register.tsx`: `KeyboardAvoidingView` with inline `style`; placeholder `onSubmitEditing={() => undefined}`
 - `profile.tsx`: `logout()` / `deregister()` not awaited, placeholder "test" button
-- `index.tsx`: no auth guard, so unauthenticated users can open the main screen
 
 ## Summary format for every task
 

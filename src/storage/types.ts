@@ -28,6 +28,7 @@ export type ChatSnapshot = {
 };
 
 export type ProfileRow = {
+    /** Lowercase userid; the mapper lowercases userids before they reach a repository. */
     userid: string;
     hash: string;
     nickname: string | null;

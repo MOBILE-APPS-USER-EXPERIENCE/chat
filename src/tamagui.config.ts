@@ -7,6 +7,12 @@ const systemFont = createFont({
     family: isWeb ? 'system-ui' : 'System',
 })
 
+// Monospace font for developer-facing output (e.g. the SQLite spike screen).
+const monoFont = createFont({
+    ...defaultConfig.fonts.body,
+    family: isWeb ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'monospace',
+})
+
 const brandThemes = {
     light: {
         ...defaultConfig.themes.light,
@@ -43,6 +49,7 @@ export const tamaguiConfig = createTamagui({
         ...defaultConfig.fonts,
         body: systemFont,
         heading: systemFont,
+        mono: monoFont,
     },
     themes: {
         ...defaultConfig.themes,
