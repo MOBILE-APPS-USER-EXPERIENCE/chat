@@ -1,14 +1,16 @@
 import ConfirmDialog from '@/components/confirm-dialog';
-import { session } from '@/session';
+import { session, useSession } from '@/session';
 import { describeAuthError } from '@/utils/auth-error';
 import { useState } from 'react';
-import { Button, H2, Text, YStack } from 'tamagui';
+import { Button, Text, YStack } from 'tamagui';
 
+import Header from '@/components/header';
 import { triggerPrimaryButtonHaptic } from '@/utils/primary-button-haptic';
 
 export default function ProfileScreen() {
     const [dialogVisible, setDialogVisible] = useState(false);
     const [error, setError] = useState<string>();
+    const sessionState = useSession();
 
     async function handleLogout() {
         setError(undefined);
@@ -29,9 +31,31 @@ export default function ProfileScreen() {
         }
     }
 
+    /**
+     * Generates user initials based on the username from the session state.
+     * It extracts the first letter of each word in the username, converts them to uppercase,
+     * and joins them together.
+     *
+     * @returns {string} - The initials of the user, or '?' if the username is not available.
+     */
+    function getUserInitials(): string {
+        if (sessionState?.status !== 'signed_in') return '?';
+
+        const username = sessionState?.account?.nickname ?? '?';
+
+        // Match Unicode letters that are preceded by a non-letter or start of string
+        const initials = username.match(/(?:^|[^\p{L}])(\p{L})/gu);
+        return initials
+            ? initials
+                .map(match => match.replaceAll(/[^\p{L}]/gu, ''))
+                .join('')
+                .toUpperCase()
+            : '?';
+    }
+
     return (
         <YStack flex={1} items="center" justify="center" gap={8} backgroundColor="background">
-            <H2>Profil</H2>
+            <Header title="Profil" avatarPlaceholder={getUserInitials()} avatarLabel='Initialien des Nicknames'></Header>
 
             <Button
                 onPress={() => {
@@ -40,8 +64,6 @@ export default function ProfileScreen() {
                 }}>
                 Logout
             </Button>
-
-            <Button onPress={() => void 0}>test</Button>
 
             <Button
                 backgroundColor="error"
@@ -56,7 +78,8 @@ export default function ProfileScreen() {
             <ConfirmDialog
                 visible={dialogVisible}
                 title="Account löschen"
-                message="Bist du sicher?"
+                message="Bist du sicher? Das kann nicht rückgängig gemacht werden.
+Bereits gesendete Nachrichten werden nicht vom Server gelöscht."
                 onConfirm={() => void confirmDeleteAccount()}
                 onCancel={() => setDialogVisible(false)}
             />

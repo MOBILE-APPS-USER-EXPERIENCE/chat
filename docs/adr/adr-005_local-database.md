@@ -210,7 +210,7 @@ If any step fails, fall back to `MemoryAccountStorageFactory` and show a persist
 "data is not stored on this device". This is **described only**; it is not implemented in this
 step.
 
-## Repositories and degradation (step 5)
+## Repositories and degradation (implementation)
 
 The repositories (`ChatRepository`, `ProfileRepository`, `MessageRepository`) are implemented on
 the sync Drizzle driver in `src/storage/db/sqlite*.ts` and are proven by the same contract tests

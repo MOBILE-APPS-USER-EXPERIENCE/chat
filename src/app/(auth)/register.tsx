@@ -29,6 +29,21 @@ export default function RegisterScreen() {
       onSubmit={handleRegister}
       switchLabel="Bereits registriert? Zum Login"
       switchHref="/login">
+
+      {/* Add dropdown server selection field */}
+      <AuthField
+        id="register-server"
+        label="Server"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="off"
+        textContentType="none"
+        disabled={isSubmitting}
+        onChangeText={() => { }}
+        placeholder="Server auswählen"
+        value=""
+      />
+
       <AuthField
         id="register-userid"
         label="Hochschul-ID"

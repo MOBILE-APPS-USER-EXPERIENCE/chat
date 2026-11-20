@@ -15,7 +15,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const state = useSession();
 
-  const theme = colorScheme === 'dark' ? 'dark' : 'light';
+  let theme = colorScheme === 'dark' ? 'dark' : 'light';
 
   useEffect(() => {
     session.init()
@@ -36,8 +36,8 @@ export default function RootLayout() {
         ) : (
           <Stack screenOptions={{ headerShown: true, headerBackTitle: '' }}>
             <Stack.Protected guard={signedIn}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="profile" />
+              <Stack.Screen name="(tabs)/index" />
+              <Stack.Screen name="(tabs)/profile" />
             </Stack.Protected>
             <Stack.Protected guard={!signedIn}>
               <Stack.Screen name="(auth)/login" />
