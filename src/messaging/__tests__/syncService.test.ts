@@ -184,11 +184,17 @@ describe.each(backends)('SyncService (%s storage)', (_name, makeStorage) => {
         for (const id of [1, 2, 3]) h.api.messages.set(id, []);
         let inFlight = 0;
         let maxInFlight = 0;
-        h.api.onCall = (call) => {
-            if (call.method !== 'getMessages') return;
+        const inner = h.api.getMessages.bind(h.api);
+        h.api.getMessages = async (chatId: number, fromId: number) => {
             inFlight += 1;
             maxInFlight = Math.max(maxInFlight, inFlight);
-            void flush().then(() => { inFlight -= 1; });
+            try {
+                // Span a macrotask so a concurrent service would be counted as overlapping.
+                await flush();
+                return await inner(chatId, fromId);
+            } finally {
+                inFlight -= 1;
+            }
         };
         await h.service.runCycle();
         expect(h.api.callsOf('getMessages').map(call => call.chatId)).toEqual([1, 2, 3]);

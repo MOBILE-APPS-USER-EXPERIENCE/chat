@@ -19,14 +19,22 @@ export default function TabsLayout() {
                 name="index"
                 options={{
                     title: 'Chats',
-                    tabBarIcon: ({ color, size }) => <MessagesCircle color={color} size={size} />,
+                    // The `color` param is typed as nullable ColorValue, which Tamagui icons
+                    // reject. TabBarIcon renders the icon twice with the tints configured
+                    // above, so `focused` + theme tokens produce the same colors.
+                    tabBarIcon: ({ focused, size }) => (
+                        <MessagesCircle color={focused ? 'accent' : 'textSecondary'} size={size} />
+                    ),
                 }}
             />
             <Tabs.Screen
                 name="profile"
                 options={{
                     title: 'Profil',
-                    tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+                    // See comment above: `focused` + theme tokens match the configured tints.
+                    tabBarIcon: ({ focused, size }) => (
+                        <User color={focused ? 'accent' : 'textSecondary'} size={size} />
+                    ),
                 }}
             />
         </Tabs>
