@@ -1,10 +1,10 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
+import type { ChatRepository } from '../ports';
+import type { ChatRow, ChatSnapshot, MemberRole } from '../types';
 import { toChatRow, toMemberRow } from './mappers';
 import { chatMembers, chats } from './schema';
 import type { SqliteDb } from './types';
-import type { ChatRepository } from '../ports';
-import type { ChatRow, ChatSnapshot, MemberRole } from '../types';
 
 /**
  * SQLite implementation of `ChatRepository` on the sync Drizzle driver.
@@ -95,9 +95,9 @@ export class SqliteChatRepository implements ChatRepository {
 
             // Mark stored chats that the snapshot omits as missing. Computed in JS so an empty
             // snapshot works and no huge `NOT IN (...)` list is built.
-            const present = [...byId.keys()];
+            const present = new Set(byId.keys());
             const storedIds = tx.select({ id: chats.id }).from(chats).all().map(row => row.id);
-            const missing = storedIds.filter(id => !present.includes(id));
+            const missing = storedIds.filter(id => !present.has(id));
             for (const id of missing) {
                 tx.update(chats)
                     .set({ missingSince: now })

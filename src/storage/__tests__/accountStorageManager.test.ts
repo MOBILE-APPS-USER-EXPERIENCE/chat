@@ -10,6 +10,8 @@ import type { StorageEnvironment } from '../storageEnvironment';
  * touching `expo-sqlite` or the real KV store.
  */
 
+const PENDING = 'storage.pendingDeletions';
+
 function fakeStorage(tag: string): AccountStorage {
     return {
         // The repositories are never called in these tests; identity is all that matters.
@@ -20,6 +22,8 @@ function fakeStorage(tag: string): AccountStorage {
         ...({ tag } as Record<string, unknown>),
     } as AccountStorage;
 }
+
+const tagOf = (storage: AccountStorage): unknown => (storage as unknown as { tag: unknown }).tag;
 
 function fakeFactory(options: {
     openTag?: string;
@@ -59,6 +63,14 @@ function fakeKv(): KeyValueStore & { data: Map<string, unknown> } {
     };
 }
 
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => {
+        resolve = res;
+    });
+    return { promise, resolve };
+}
+
 const nativeEnv = (): StorageEnvironment => ({ kind: 'native' });
 const webEnv = (caps: Partial<Extract<StorageEnvironment, { kind: 'web' }>> = {}): StorageEnvironment => ({
     kind: 'web',
@@ -75,12 +87,16 @@ function makeManager(options: {
     memory?: AccountStorageFactory;
     kv?: KeyValueStore;
     loadCalls?: { count: number };
+    loadGate?: Promise<void>;
+    loadError?: Error;
 }) {
     const loadCalls = options.loadCalls ?? { count: 0 };
     const manager = new AccountStorageManager({
         environment: options.environment,
         loadSqlite: async () => {
             loadCalls.count++;
+            if (options.loadGate) await options.loadGate;
+            if (options.loadError) throw options.loadError;
             return options.sqlite ?? fakeFactory();
         },
         memory: options.memory ?? fakeFactory({ openTag: 'memory' }),
@@ -199,5 +215,110 @@ describe('AccountStorageManager', () => {
         await manager.destroy('a');
         const second = await manager.open('a');
         expect(await second.chats.list()).toEqual([]);
+    });
+
+    it('loads SQLite only once when the first opens and destroys run concurrently', async () => {
+        const gate = deferred<void>();
+        const sqlite = fakeFactory();
+        const { manager, loadCalls } = makeManager({ environment: nativeEnv, sqlite, loadGate: gate.promise });
+        const calls = [manager.open('a'), manager.open('b'), manager.destroy('c')];
+        gate.resolve();
+        await Promise.all(calls);
+        expect(loadCalls.count).toBe(1);
+        expect([...sqlite.opened].sort()).toEqual(['a', 'b']);
+        expect(sqlite.destroyed).toEqual(['c']);
+        expect(manager.getStatus()).toEqual({ mode: 'sqlite' });
+    });
+
+    it('sends all concurrent opens to memory when the web trial open fails, and none throws', async () => {
+        const gate = deferred<void>();
+        const sqlite = fakeFactory({ failOpen: true });
+        const memory = fakeFactory({ openTag: 'memory' });
+        const { manager, loadCalls } = makeManager({
+            environment: () => webEnv(), sqlite, memory, loadGate: gate.promise,
+        });
+        const opens = ['a', 'b', 'c'].map(id => manager.open(id));
+        gate.resolve();
+        const storages = await Promise.all(opens);
+        expect(loadCalls.count).toBe(1);
+        expect(sqlite.opened).toEqual(['a']);   // only the trial touched SQLite
+        expect([...memory.opened].sort()).toEqual(['a', 'b', 'c']);
+        expect(storages.map(tagOf)).toEqual(['memory', 'memory', 'memory']);
+        expect(manager.getStatus()).toMatchObject({ mode: 'memory', reason: 'open_failed', lastError: 'open failed' });
+    });
+
+    it('lets concurrent opens share a successful web trial and use sqlite', async () => {
+        const sqlite = fakeFactory();
+        const { manager, loadCalls } = makeManager({ environment: () => webEnv(), sqlite });
+        const storages = await Promise.all(['a', 'b', 'c'].map(id => manager.open(id)));
+        expect(loadCalls.count).toBe(1);
+        expect([...sqlite.opened].sort()).toEqual(['a', 'b', 'c']);
+        expect(storages.map(tagOf)).toEqual(['sqlite', 'sqlite', 'sqlite']);
+        expect(manager.getStatus()).toEqual({ mode: 'sqlite' });
+    });
+
+    it('does not drop pending ids when retryPendingDeletions runs before the backend is resolved', async () => {
+        const kv = fakeKv();
+        kv.data.set(PENDING, ['a', 'b']);
+        const sqlite = fakeFactory();
+        const { manager } = makeManager({
+            environment: () => webEnv({ crossOriginIsolated: false }), sqlite, kv,
+        });
+        await manager.retryPendingDeletions();
+        expect(kv.data.get(PENDING)).toEqual(['a', 'b']);
+        expect(sqlite.destroyed).toEqual([]);
+    });
+
+    it('resolves the backend first and deletes the pending ids in sqlite mode', async () => {
+        const kv = fakeKv();
+        kv.data.set(PENDING, ['a', 'b']);
+        const sqlite = fakeFactory();
+        const { manager, loadCalls } = makeManager({ environment: nativeEnv, sqlite, kv });
+        await manager.retryPendingDeletions();
+        expect(loadCalls.count).toBe(1);
+        expect(sqlite.destroyed).toEqual(['a', 'b']);
+        expect(kv.data.get(PENDING)).toEqual([]);
+    });
+
+    it('keeps the ids and deletes nothing when retrying in memory mode', async () => {
+        const kv = fakeKv();
+        kv.data.set(PENDING, ['x']);
+        const sqlite = fakeFactory();
+        const memory = fakeFactory({ openTag: 'memory' });
+        const { manager } = makeManager({
+            environment: () => webEnv({ crossOriginIsolated: false }), sqlite, memory, kv,
+        });
+        await manager.open('other');
+        await manager.retryPendingDeletions();
+        expect(kv.data.get(PENDING)).toEqual(['x']);
+        expect(memory.destroyed).toEqual([]);
+        expect(sqlite.destroyed).toEqual([]);
+    });
+
+    it('records the id in pendingDeletions when destroying in memory mode, without duplicates', async () => {
+        const kv = fakeKv();
+        const memory = fakeFactory({ openTag: 'memory' });
+        const { manager, loadCalls } = makeManager({
+            environment: () => webEnv({ crossOriginIsolated: false }), memory, kv,
+        });
+        await manager.destroy('a');
+        await manager.destroy('a');
+        expect(memory.destroyed).toEqual(['a', 'a']);
+        expect(kv.data.get(PENDING)).toEqual(['a']);
+        expect(loadCalls.count).toBe(0);
+    });
+
+    it('loses no id when several destroys run concurrently in memory mode', async () => {
+        const kv = fakeKv();
+        const { manager } = makeManager({ environment: () => webEnv({ crossOriginIsolated: false }), kv });
+        await Promise.all([manager.destroy('a'), manager.destroy('b'), manager.destroy('c')]);
+        expect([...(kv.data.get(PENDING) as string[])].sort()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('does not throw from destroy when SQLite cannot be loaded, and records the id', async () => {
+        const kv = fakeKv();
+        const { manager } = makeManager({ environment: nativeEnv, loadError: new Error('import failed'), kv });
+        await expect(manager.destroy('a')).resolves.toBeUndefined();
+        expect(kv.data.get(PENDING)).toEqual(['a']);
     });
 });

@@ -1,10 +1,10 @@
-import { eq, isNull, and } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
+import type { ProfileRepository } from '../ports';
+import type { ProfileRow } from '../types';
 import { toProfileRow } from './mappers';
 import { profiles } from './schema';
 import type { SqliteDb } from './types';
-import type { ProfileRepository } from '../ports';
-import type { ProfileRow } from '../types';
 
 /**
  * SQLite implementation of `ProfileRepository`. `profiles.hash` is `UNIQUE`, so a batch that
@@ -74,9 +74,9 @@ export class SqliteProfileRepository implements ProfileRepository {
             }
 
             // Mark stored profiles that the directory omits as missing.
-            const present = [...batch.keys()];
+            const present = new Set(batch.keys());
             const storedUserids = tx.select({ userid: profiles.userid }).from(profiles).all().map(row => row.userid);
-            const missing = storedUserids.filter(userid => !present.includes(userid));
+            const missing = storedUserids.filter(userid => !present.has(userid));
             for (const userid of missing) {
                 tx.update(profiles)
                     .set({ missingSince: now })
