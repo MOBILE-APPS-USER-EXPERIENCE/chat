@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { setActiveContext } from '../api/apiClient';
 import * as authService from '../api/authService';
+import { accountStorage } from '../storage/accountStorage';
 import { keyValueStore, registry, secretStore } from '../storage';
 import type { AuthApi } from './ports';
 import { headersForServer } from './serverHeaders';
@@ -33,6 +34,8 @@ export const session = new SessionService({
     now: Date.now,
     // Users have to log in again after the update; old plain-text values are removed.
     legacyCleanup: () => AsyncStorage.multiRemove(LEGACY_KEYS),
+    // Removing an account also deletes its local database (best effort, see ADR-005).
+    onAccountRemoved: (accountId) => accountStorage.destroy(accountId),
 });
 
 export { useSession } from './useSession';

@@ -210,6 +210,33 @@ If any step fails, fall back to `MemoryAccountStorageFactory` and show a persist
 "data is not stored on this device". This is **described only**; it is not implemented in this
 step.
 
+## Repositories and degradation (step 5)
+
+The repositories (`ChatRepository`, `ProfileRepository`, `MessageRepository`) are implemented on
+the sync Drizzle driver in `src/storage/db/sqlite*.ts` and are proven by the same contract tests
+that the memory implementation passes (`src/storage/__tests__/contracts/`). The Node tests use
+`better-sqlite3` over the shared `SqliteDb` type (`BaseSQLiteDatabase<'sync', unknown, typeof
+schema>`), which both drivers satisfy without casts.
+
+Rules the implementations follow:
+
+- **Never `INSERT OR REPLACE` on `chats`.** Replacing the parent row cascades and deletes the
+  chat's messages. Snapshot re-apply uses `INSERT ... ON CONFLICT(id) DO UPDATE` with the snapshot
+  fields only; `firstSeenAt`, `polledUpTo` and `lastPolledAt` are never part of the update.
+- **Transactions are synchronous.** The ports are async, but every Drizzle transaction callback
+  runs synchronously (both drivers), so a rejected batch rolls back completely and changes
+  nothing.
+- **Backend selection** (`src/storage/accountStorageManager.ts`): resolved once, lazily, on the
+  first `open`/`destroy`. Native always uses SQLite and propagates open errors. Web checks the
+  capabilities in the order above; a missing one degrades to memory with the reason
+  `no_isolation`, `no_secure_context` or `no_opfs` without ever loading the SQLite backend. With
+  all capabilities present the first open is a trial: if it throws, the app degrades to memory
+  with reason `open_failed` (the error message is kept in the status, not swallowed). After
+  resolution the mode never changes.
+- **Pending deletions.** `destroy` must not break deregistration: a failed deletion is recorded
+  in the KV store under `storage.pendingDeletions` and retried before the next open. A re-opened
+  account is removed from the list.
+
 ## Limitation: no encryption
 
 The database is **not encrypted**. There is no SQLCipher in this step, so decrypted plaintext sits
@@ -249,6 +276,22 @@ SDK 58 (see Risks).
 | 2 | iOS (Expo Go) | Write, kill and restart the app, Read: data still there | |
 | 3 | iOS (Expo Go) | Cascade test works | |
 | 4 | iOS (Expo Go) | Delete DB, restart, Open + migrate: DB is empty again | |
+| 1 | Web (Chrome) | Repos: status shows `sqlite`; Write via repos, reload, Read via repos: data still there | |
+| 2 | Web (Chrome) | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains | |
+| 3 | Web (Chrome) | Repos: Delete account storage, reload, Read via repos: empty | |
+| 4 | Web (Chrome) | Repos: Two tabs: write in one, read in the other; note errors | |
+| 1 | Web (Firefox) | Repos: status shows `sqlite`; Write via repos, reload, Read via repos: data still there | |
+| 2 | Web (Firefox) | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains | |
+| 3 | Web (Firefox) | Repos: Delete account storage, reload, Read via repos: empty | |
+| 4 | Web (Firefox) | Repos: Two tabs: write in one, read in the other; note errors | |
+| 1 | Web (static export, no isolation headers, `npx serve dist`) | Repos: status shows `memory` with reason `no_isolation`; app starts, login works, data gone after reload (expected) | |
+| 2 | Web (static export, no isolation headers, `npx serve dist`) | Repos: Write via repos, reload, Read via repos: empty again (memory mode) | |
+| 1 | Android (Expo Go) | Repos: status shows `sqlite`; Write via repos, kill and restart, Read via repos: data still there | |
+| 2 | Android (Expo Go) | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains | |
+| 3 | Android (Expo Go) | Repos: Delete account storage, restart, Read via repos: empty | |
+| 1 | iOS (Expo Go) | Repos: status shows `sqlite`; Write via repos, kill and restart, Read via repos: data still there | |
+| 2 | iOS (Expo Go) | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains | |
+| 3 | iOS (Expo Go) | Repos: Delete account storage, restart, Read via repos: empty | |
 
 ## Consequences
 

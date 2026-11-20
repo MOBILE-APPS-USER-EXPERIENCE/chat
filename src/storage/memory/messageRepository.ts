@@ -11,6 +11,9 @@ export class MemoryMessageRepository implements MessageRepository {
     }
 
     async listPage(chatId: number, opts: { beforeId?: number; limit: number }) {
+        if (!Number.isInteger(opts.limit) || opts.limit <= 0) {
+            throw new RangeError(`limit must be a positive integer, got ${opts.limit}`);
+        }
         return [...(this.db.messages.get(chatId)?.values() ?? [])]
             .filter(message => opts.beforeId === undefined || message.id < opts.beforeId)
             .sort((a, b) => b.id - a.id)

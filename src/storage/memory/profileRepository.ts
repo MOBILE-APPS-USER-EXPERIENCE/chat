@@ -16,8 +16,32 @@ export class MemoryProfileRepository implements ProfileRepository {
     }
 
     async applyDirectory(profiles: Omit<ProfileRow, 'fetchedAt' | 'missingSince'>[], now: number) {
-        const present = new Set<string>();
+        // Duplicate userids in one batch: the last one wins.
+        const batch = new Map<string, Omit<ProfileRow, 'fetchedAt' | 'missingSince'>>();
         for (const profile of profiles) {
+            batch.set(profile.userid, { ...profile });
+        }
+
+        // A hash must never belong to two different userids. All checks run before any mutation,
+        // so a rejected batch changes nothing. A stored hash counts as released when its owner
+        // also appears in the batch (with a different hash — equal claims fail the check above).
+        const hashOwners = new Map<string, string>();
+        for (const profile of batch.values()) {
+            const owner = hashOwners.get(profile.hash);
+            if (owner !== undefined && owner !== profile.userid) {
+                throw new Error(`hash collision: ${profile.hash}`);
+            }
+            hashOwners.set(profile.hash, profile.userid);
+        }
+        for (const profile of batch.values()) {
+            const stored = [...this.db.profiles.values()].find(p => p.hash === profile.hash);
+            if (stored && stored.userid !== profile.userid && !batch.has(stored.userid)) {
+                throw new Error(`hash collision: ${profile.hash}`);
+            }
+        }
+
+        const present = new Set<string>();
+        for (const profile of batch.values()) {
             present.add(profile.userid);
             this.db.profiles.set(profile.userid, {
                 ...profile,

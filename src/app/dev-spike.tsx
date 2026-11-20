@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button, H2, ScrollView, Text, XStack, YStack } from 'tamagui';
 
 import { Spacing } from '@/constants/layout';
+import { accountStorage, getStorageStatus } from '@/storage/accountStorage';
 import { deleteAccountDatabase, openAccountDatabase } from '@/storage/db/openDatabase';
 import { chats, rawMessages } from '@/storage/db/schema';
 
@@ -12,6 +13,7 @@ import { chats, rawMessages } from '@/storage/db/schema';
  */
 
 const SPIKE_ACCOUNT_ID = 'spike';
+const SPIKE_REPO_ACCOUNT_ID = 'spike-repo';
 
 type Capabilities = {
     crossOriginIsolated: boolean | null;
@@ -156,6 +158,72 @@ export default function DevSpikeScreen() {
         });
     }
 
+    function repoWrite() {
+        return run('Repo write', async () => {
+            const storage = await accountStorage.open(SPIKE_REPO_ACCOUNT_ID);
+            try {
+                const now = Date.now();
+                await storage.chats.applySnapshot([
+                    {
+                        id: 1, name: 'Repo chat 1', visibility: 'private', directchat: false,
+                        role: 'member', joined: true, ownerUserid: 'spike-owner',
+                        members: [{ userid: 'spike-owner', role: 'owner' }, { userid: 'spike-user', role: 'member' }],
+                    },
+                    {
+                        id: 2, name: 'Repo chat 2', visibility: 'private', directchat: false,
+                        role: 'member', joined: true, ownerUserid: 'spike-owner',
+                        members: [{ userid: 'spike-owner', role: 'owner' }],
+                    },
+                ], now);
+                const result = await storage.messages.appendBatch(1, [1, 2, 3].map(id => ({
+                    id, userid: 'spike-user', userNick: 'Spike', userFullname: null, userHash: null,
+                    serverTime: null, important: false, text: `repo message ${id}`,
+                    photoId: null, fileId: null, position: null,
+                })), now);
+                return `wrote 2 chats, members, ${result.inserted} messages, cursor ${result.polledUpTo}`;
+            } finally {
+                await storage.close();
+            }
+        });
+    }
+
+    function repoRead() {
+        return run('Repo read', async () => {
+            const storage = await accountStorage.open(SPIKE_REPO_ACCOUNT_ID);
+            try {
+                const chatList = await storage.chats.list();
+                const members = await storage.chats.listMembers(1);
+                const page = await storage.messages.listPage(1, { limit: 10 });
+                const chat = await storage.chats.get(1);
+                return `chats=${chatList.length} members(1)=${members.length} messages(1)=${page.length} cursor=${chat?.polledUpTo ?? 'none'}`;
+            } finally {
+                await storage.close();
+            }
+        });
+    }
+
+    function repoPurge() {
+        return run('Repo purge chat 1', async () => {
+            const storage = await accountStorage.open(SPIKE_REPO_ACCOUNT_ID);
+            try {
+                await storage.chats.purge(1);
+                const remaining = await storage.chats.list();
+                const page = await storage.messages.listPage(1, { limit: 10 });
+                return `remaining chats=${remaining.length} messages(1)=${page.length}`;
+            } finally {
+                await storage.close();
+            }
+        });
+    }
+
+    function repoDelete() {
+        return run('Repo delete account storage', async () => {
+            await accountStorage.destroy(SPIKE_REPO_ACCOUNT_ID);
+            const status = getStorageStatus();
+            return `deleted (mode: ${status.mode}${status.mode === 'memory' ? `, reason: ${status.reason}` : ''})`;
+        });
+    }
+
     return (
         <ScrollView backgroundColor="background" contentContainerStyle={{ padding: Spacing.four }}>
             <YStack gap={Spacing.two}>
@@ -167,6 +235,16 @@ export default function DevSpikeScreen() {
                     <Button disabled={busy} onPress={() => void cascadeTest()}>Cascade test</Button>
                     <Button disabled={busy} onPress={() => void deleteDb()}>Delete DB</Button>
                     <Button disabled={busy} onPress={() => void capabilities()}>Capabilities</Button>
+                </XStack>
+                <H2>Repo round trip</H2>
+                <Text fontFamily="mono" color="textSecondary">
+                    {`storage status: ${JSON.stringify(getStorageStatus())}`}
+                </Text>
+                <XStack gap={Spacing.two} flexWrap="wrap">
+                    <Button disabled={busy} onPress={() => void repoWrite()}>Write via repos</Button>
+                    <Button disabled={busy} onPress={() => void repoRead()}>Read via repos</Button>
+                    <Button disabled={busy} onPress={() => void repoPurge()}>Purge chat 1</Button>
+                    <Button disabled={busy} onPress={() => void repoDelete()}>Delete account storage</Button>
                 </XStack>
                 <Text fontFamily="mono" color="textSecondary">
                     {output.length === 0 ? 'No output yet.' : output.join('\n')}

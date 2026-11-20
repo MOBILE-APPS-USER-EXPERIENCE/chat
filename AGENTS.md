@@ -49,11 +49,12 @@ This file is for AI agents **and** humans. Humans own every line that lands in t
   - `apiClient.ts`: stateless `request`, `postRequest`, `requestBinary`, `ApiError`; the active
     `ApiContext` is set by the session layer
   - `*Service.ts`: one file per domain (auth, chat, message, invite, user, admin, connectivity)
-  - `serverSettings.ts`: change/reset server
   - `types.ts`: types derived by hand from `docs/openapi.yaml`
-- `src/session/` – servers, accounts, login/register/logout/deregister, session restore
-- `src/storage/` – ports, memory implementations, KV registry, `SecretStore`, and (in progress)
-  the SQLite account database under `src/storage/db/`
+- `src/session/` – servers, accounts, login/register/logout/deregister, session restore,
+  server selection (`serverSettings.ts`)
+- `src/storage/` – ports, memory implementations, KV registry, `SecretStore`, and the SQLite
+  account database under `src/storage/db/` (Drizzle sync driver, one database per account,
+  backend selected at runtime: SQLite, or memory degradation on web)
 - `src/components/` – reusable UI (e.g. `confirm-dialog.tsx`)
 - `src/constants/layout.ts` – `Spacing` scale
 - `src/hooks/`, `src/utils/` – hooks and helpers

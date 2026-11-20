@@ -68,5 +68,57 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
             expect((await storage.messages.get(3, 1))?.text).toBe('m1');
             expect((await storage.messages.listPage(3, { limit: 10 }))[0]?.text).toBe('m1');
         });
+
+        it('rejects a non-positive or non-integer limit with a RangeError', async () => {
+            await storage.messages.appendBatch(3, [msg(1), msg(2), msg(3)], 2000);
+            await expect(storage.messages.listPage(3, { limit: 0 })).rejects.toThrow(RangeError);
+            await expect(storage.messages.listPage(3, { limit: -1 })).rejects.toThrow(RangeError);
+            await expect(storage.messages.listPage(3, { limit: 1.5 })).rejects.toThrow(RangeError);
+            // A valid call still works after the rejections.
+            expect((await storage.messages.listPage(3, { limit: 2 })).map(message => message.id)).toEqual([3, 2]);
+        });
+
+        it('treats beforeId as exclusive and returns an empty page for unknown chats', async () => {
+            await storage.messages.appendBatch(3, [msg(1), msg(2), msg(3)], 2000);
+            expect((await storage.messages.listPage(3, { beforeId: 3, limit: 10 })).map(message => message.id)).toEqual([2, 1]);
+            expect(await storage.messages.listPage(99, { limit: 10 })).toEqual([]);
+            expect(await storage.messages.countAfter(99, 0)).toBe(0);
+        });
+
+        it('rejects an empty batch for an unknown chat and changes nothing', async () => {
+            await expect(storage.messages.appendBatch(99, [], 2000)).rejects.toThrow();
+            expect((await storage.chats.get(3))?.lastPolledAt).toBeNull();
+        });
+
+        it('counts duplicate ids in one batch once, first wins', async () => {
+            const result = await storage.messages.appendBatch(3, [msg(1, 'first'), msg(1, 'second'), msg(1, 'third')], 2000);
+            expect(result).toEqual({ inserted: 1, polledUpTo: 1 });
+            expect((await storage.messages.get(3, 1))?.text).toBe('first');
+        });
+
+        it('ignores resetChat for an unknown chat', async () => {
+            await storage.messages.appendBatch(3, [msg(1)], 2000);
+            await storage.messages.resetChat(99);
+            expect(await storage.messages.get(3, 1)).not.toBeNull();
+            expect((await storage.chats.get(3))?.polledUpTo).toBe(1);
+        });
+
+        it('round-trips text, flags, nullable fields, and large ids', async () => {
+            const big = 'x'.repeat(100_000);
+            const batch: RawMessageInput[] = [
+                { ...msg(1), text: null },
+                { ...msg(2), text: '' },
+                { ...msg(3), text: 'äöü 🎉 中文' },
+                { ...msg(4), text: big },
+                { ...msg(5), important: true, userNick: null, userFullname: 'Full Name', userHash: 'h', serverTime: null, photoId: 'p', fileId: 'f', position: '7' },
+                { ...msg(2_000_000_000), text: 'max id' },
+            ];
+            await storage.messages.appendBatch(3, batch, 2000);
+            const stored = await Promise.all(batch.map(message => storage.messages.get(3, message.id)));
+            expect(stored.map(message => message?.text)).toEqual([null, '', 'äöü 🎉 中文', big, 'm5', 'max id']);
+            expect(stored.map(message => message?.important)).toEqual([false, false, false, false, true, false]);
+            expect(stored[4]).toMatchObject({ userNick: null, userFullname: 'Full Name', userHash: 'h', serverTime: null, photoId: 'p', fileId: 'f', position: '7' });
+            expect(stored[5]).toMatchObject({ id: 2_000_000_000, chatId: 3 });
+        });
     });
 }

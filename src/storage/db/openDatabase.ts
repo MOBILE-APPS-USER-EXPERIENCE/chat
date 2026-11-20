@@ -3,6 +3,7 @@ import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 
 import migrations from './migrations/migrations';
 import * as schema from './schema';
+import { createSharedOpener } from './sharedOpen';
 import type { AccountDb } from './types';
 
 /**
@@ -25,15 +26,6 @@ type OpenedDatabase = {
     /** Idempotent: closing twice is not an error. */
     close(): Promise<void>;
 };
-
-type OpenEntry = {
-    promise: Promise<OpenedDatabase>;
-    /** Number of callers currently holding the handle. */
-    refs: number;
-};
-
-/** One entry per account id, so concurrent callers share a single open and a single migration. */
-const openDatabases = new Map<string, OpenEntry>();
 
 function databaseName(accountId: string): string {
     if (!ACCOUNT_ID_PATTERN.test(accountId)) {
@@ -73,47 +65,15 @@ async function openAndMigrate(accountId: string): Promise<OpenedDatabase> {
     }
 }
 
-function withRelease(accountId: string, opened: OpenedDatabase): OpenAccountDatabaseResult {
-    let released = false;
-    return {
-        db: opened.db,
-        close: async () => {
-            if (released) return;
-            released = true;
-            const entry = openDatabases.get(accountId);
-            if (entry) {
-                entry.refs -= 1;
-                if (entry.refs > 0) return;
-                openDatabases.delete(accountId);
-            }
-            await opened.close();
-        },
-    };
-}
+const opener = createSharedOpener<OpenedDatabase>(openAndMigrate, opened => opened.close());
 
 /**
  * Opens (and migrates) the database for an account. Concurrent calls for the same id share one
  * open; the returned `close` only closes the connection when the last caller released it.
  */
 export async function openAccountDatabase(accountId: string): Promise<OpenAccountDatabaseResult> {
-    const existing = openDatabases.get(accountId);
-    if (existing) {
-        existing.refs += 1;
-        return withRelease(accountId, await existing.promise);
-    }
-
-    const entry: OpenEntry = { promise: openAndMigrate(accountId), refs: 1 };
-    openDatabases.set(accountId, entry);
-
-    let opened: OpenedDatabase;
-    try {
-        opened = await entry.promise;
-    } catch (error) {
-        // A failed open must not be cached, otherwise every later call would fail the same way.
-        if (openDatabases.get(accountId) === entry) openDatabases.delete(accountId);
-        throw error;
-    }
-    return withRelease(accountId, opened);
+    const handle = await opener.acquire(accountId);
+    return { db: handle.value.db, close: () => handle.release() };
 }
 
 /** expo-sqlite reports a missing file as "Database '<name>' not found" on Android and iOS. */
@@ -127,14 +87,7 @@ function isDatabaseNotFoundError(error: unknown): boolean {
  */
 export async function deleteAccountDatabase(accountId: string): Promise<void> {
     const name = databaseName(accountId);
-
-    const entry = openDatabases.get(accountId);
-    if (entry) {
-        openDatabases.delete(accountId);
-        // The open may still be in flight; wait for it so the file is not deleted underneath it.
-        const opened = await entry.promise.catch(() => null);
-        if (opened) await opened.close();
-    }
+    await opener.destroy(accountId);
 
     const SQLite = await import('expo-sqlite');
     try {

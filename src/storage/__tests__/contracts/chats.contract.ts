@@ -70,5 +70,46 @@ export function chatRepositoryContract(name: string, make: () => Promise<Account
             expect((await storage.chats.list())[0]).toMatchObject({ name: 'Chat 1' });
             expect(await storage.chats.listMembers(1)).toEqual([{ userid: 'u1', role: 'member' }]);
         });
+
+        it('lets the last duplicate chat id and the last duplicate member userid win', async () => {
+            await storage.chats.applySnapshot([
+                { ...snapshot(1), name: 'First' },
+                {
+                    ...snapshot(1), name: 'Second',
+                    members: [{ userid: 'u1', role: 'member' }, { userid: 'u1', role: 'owner' }],
+                },
+            ], 100);
+            expect(await storage.chats.get(1)).toMatchObject({ name: 'Second' });
+            expect(await storage.chats.listMembers(1)).toEqual([{ userid: 'u1', role: 'owner' }]);
+        });
+
+        it('orders members by userid ascending with plain code-unit comparison', async () => {
+            await storage.chats.applySnapshot([{
+                ...snapshot(1),
+                members: [
+                    { userid: 'b', role: 'member' },
+                    { userid: 'a', role: 'member' },
+                    { userid: 'Z', role: 'member' },
+                    { userid: 'A', role: 'member' },
+                ],
+            }], 100);
+            expect((await storage.chats.listMembers(1)).map(member => member.userid)).toEqual(['A', 'Z', 'a', 'b']);
+        });
+
+        it('keeps stored messages when a snapshot is re-applied', async () => {
+            await storage.chats.applySnapshot([snapshot(1)], 100);
+            await storage.messages.appendBatch(1, [{
+                id: 1, userid: 'u', userNick: null, userFullname: null, userHash: null,
+                serverTime: null, important: false, text: 'kept', photoId: null, fileId: null, position: null,
+            }], 110);
+            await storage.chats.applySnapshot([{ ...snapshot(1), name: 'Re-applied' }], 200);
+            expect((await storage.messages.get(1, 1))?.text).toBe('kept');
+            expect((await storage.chats.get(1))?.polledUpTo).toBe(1);
+        });
+
+        it('accepts an empty snapshot on an empty database', async () => {
+            await storage.chats.applySnapshot([], 100);
+            expect(await storage.chats.list()).toEqual([]);
+        });
     });
 }

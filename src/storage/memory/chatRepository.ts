@@ -1,5 +1,5 @@
 import type { ChatRepository } from '../ports';
-import type { ChatRow } from '../types';
+import type { ChatRow, MemberRole } from '../types';
 import { MemoryDb } from './memoryStorage';
 
 export class MemoryChatRepository implements ChatRepository {
@@ -18,7 +18,10 @@ export class MemoryChatRepository implements ChatRepository {
     }
 
     async listMembers(chatId: number) {
-        return (this.db.members.get(chatId) ?? []).map(member => ({ ...member }));
+        return (this.db.members.get(chatId) ?? [])
+            .map(member => ({ ...member }))
+            // Plain code-unit comparison, matching `ORDER BY userid` in SQLite (BINARY collation).
+            .sort((a, b) => (a.userid < b.userid ? -1 : a.userid > b.userid ? 1 : 0));
     }
 
     async applySnapshot(snapshots: Parameters<ChatRepository['applySnapshot']>[0], now: number) {
@@ -41,7 +44,12 @@ export class MemoryChatRepository implements ChatRepository {
                 lastPolledAt: existing?.lastPolledAt ?? null,
             };
             this.db.chats.set(snapshot.id, { ...row });
-            this.db.members.set(snapshot.id, snapshot.members.map(member => ({ ...member })));
+            // Duplicate userids within one chat: the last one wins, one row per (chatId, userid).
+            const members = new Map<string, { userid: string; role: MemberRole }>();
+            for (const member of snapshot.members) {
+                members.set(member.userid, { ...member });
+            }
+            this.db.members.set(snapshot.id, [...members.values()]);
         }
         for (const [id, chat] of this.db.chats) {
             if (!present.has(id) && chat.missingSince === null) {
