@@ -1,18 +1,23 @@
-import { AuthField } from '@/components/auth/auth-field';
-import { AuthScreen } from '@/components/auth/auth-screen';
-import { useAuthSubmit } from '@/hooks/use-auth-submit';
-import { session } from '@/session';
-import { useState } from 'react';
+import { AuthField } from "@/components/auth/auth-field";
+import { AuthScreen } from "@/components/auth/auth-screen";
+import { ServerField } from "@/components/auth/server-field";
+import { useAuthSubmit } from "@/hooks/use-auth-submit";
+import { session } from "@/session";
+import { useState } from "react";
 
 export default function LoginScreen() {
-  const [userid, setUserid] = useState('');
-  const [password, setPassword] = useState('');
-  const { error, isSubmitting, submit } = useAuthSubmit('Login fehlgeschlagen.');
+  const [userid, setUserid] = useState("");
+  const [password, setPassword] = useState("");
+  const { error, isSubmitting, submit } = useAuthSubmit(
+    "Login fehlgeschlagen.",
+  );
 
   const handleLogin = () =>
     submit(
       () => session.login(userid.trim(), password),
-      !userid.trim() || !password ? 'Bitte gib Hochschul-ID und Passwort ein.' : undefined,
+      !userid.trim() || !password
+        ? "Bitte gib Hochschul-ID und Passwort ein."
+        : undefined,
     );
 
   return (
@@ -24,7 +29,10 @@ export default function LoginScreen() {
       error={error}
       onSubmit={handleLogin}
       switchLabel="Noch kein Konto? Jetzt registrieren"
-      switchHref="/register">
+      switchHref="/register"
+    >
+      <ServerField disabled={isSubmitting} />
+
       <AuthField
         id="login-userid"
         label="Hochschul-ID"

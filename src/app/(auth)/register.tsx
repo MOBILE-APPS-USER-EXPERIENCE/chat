@@ -1,21 +1,30 @@
-import { AuthField } from '@/components/auth/auth-field';
-import { AuthScreen } from '@/components/auth/auth-screen';
-import { useAuthSubmit } from '@/hooks/use-auth-submit';
-import { session } from '@/session';
-import { useState } from 'react';
+import { AuthField } from "@/components/auth/auth-field";
+import { AuthScreen } from "@/components/auth/auth-screen";
+import { ServerField } from "@/components/auth/server-field";
+import { useAuthSubmit } from "@/hooks/use-auth-submit";
+import { session } from "@/session";
+import { useState } from "react";
 
 export default function RegisterScreen() {
-  const [userid, setUserid] = useState('');
-  const [password, setPassword] = useState('');
-  const [nickname, setNickname] = useState('');
-  const [fullname, setFullname] = useState('');
-  const { error, isSubmitting, submit } = useAuthSubmit('Registrierung fehlgeschlagen.');
+  const [userid, setUserid] = useState("");
+  const [password, setPassword] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [fullname, setFullname] = useState("");
+  const { error, isSubmitting, submit } = useAuthSubmit(
+    "Registrierung fehlgeschlagen.",
+  );
 
   const handleRegister = () =>
     submit(
-      () => session.register(userid.trim(), password, nickname.trim(), fullname.trim()),
+      () =>
+        session.register(
+          userid.trim(),
+          password,
+          nickname.trim(),
+          fullname.trim(),
+        ),
       !userid.trim() || !password || !nickname.trim() || !fullname.trim()
-        ? 'Bitte fülle alle Felder aus.'
+        ? "Bitte fülle alle Felder aus."
         : undefined,
     );
 
@@ -28,21 +37,9 @@ export default function RegisterScreen() {
       error={error}
       onSubmit={handleRegister}
       switchLabel="Bereits registriert? Zum Login"
-      switchHref="/login">
-
-      {/* Add dropdown server selection field */}
-      <AuthField
-        id="register-server"
-        label="Server"
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="off"
-        textContentType="none"
-        disabled={isSubmitting}
-        onChangeText={() => { }}
-        placeholder="Server auswählen"
-        value=""
-      />
+      switchHref="/login"
+    >
+      <ServerField disabled={isSubmitting} />
 
       <AuthField
         id="register-userid"
