@@ -40,18 +40,10 @@ export default function Index() {
   const { chats, loading } = useChats({ joined: true });
 
   return (
-    <YStack
-      items="center"
-      flex={1}
-      gap={Spacing.two}
-      justify="center"
-      px={Spacing.four}
-      pt={insets.top + Spacing.five}
-      pb={insets.bottom + Spacing.four}
-      backgroundColor="background">
+    <YStack flex={1} backgroundColor="background" pb={Spacing.four}>
+      <Header title="Chats" showBackButton={false} />
 
-      <H2>Chat</H2>
-      <Text color="textSecondary">Deine Chats werden hier angezeigt.</Text>
+      <YStack flex={1} gap={Spacing.two} px={Spacing.four} pt={Spacing.two}>
         {loading ? (
           <YStack flex={1} items="center" justify="center">
             <Spinner size="large" color="accent" />
@@ -67,6 +59,7 @@ export default function Index() {
             renderItem={({ item }) => <ChatListItem chat={item} />}
           />
         )}
+      </YStack>
     </YStack>
   );
 }
