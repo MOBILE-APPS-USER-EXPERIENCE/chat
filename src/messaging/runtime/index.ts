@@ -2,6 +2,7 @@
 // src/messaging/apiAdapter: this is the composition root. Importing it has no side effects
 // beyond constructing these two objects; `_layout.tsx` calls `syncRuntime.start()` explicitly.
 import { session } from "../../session";
+import { newId } from "../../storage";
 import { accountStorage } from "../../storage/accountStorage";
 import { createSyncApi, isNetworkError } from "../apiAdapter";
 import { createForegroundSignal } from "./foregroundSignal";
@@ -18,6 +19,7 @@ export const syncRuntime = new SyncScheduler({
   events: storageEvents,
   now: Date.now,
   isNetworkError,
+  newId,
   onInvalidToken: () => {
     void session.logout();
   },

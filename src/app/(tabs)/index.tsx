@@ -1,6 +1,5 @@
 import { router } from "expo-router";
 import { FlatList } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Spinner, Text, XStack, YStack } from "tamagui";
 
 import Header from "@/components/header";

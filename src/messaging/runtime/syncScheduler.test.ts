@@ -70,6 +70,7 @@ function setup(intervalMs = 5000) {
   const closedIds: string[] = [];
   const invalidTokenCalls: number[] = [];
   let openFailuresLeft = 0;
+  let idCounter = 0;
 
   const scheduler = new SyncScheduler({
     session,
@@ -77,6 +78,7 @@ function setup(intervalMs = 5000) {
     events,
     now: Date.now,
     isNetworkError: isFakeNetworkError,
+    newId: () => `cid-${++idCounter}`,
     onInvalidToken: () => {
       invalidTokenCalls.push(Date.now());
     },
@@ -354,6 +356,131 @@ describe("SyncScheduler", () => {
     expect(openCalls).toEqual(["acc1", "acc1"]);
     expect(scheduler.getAccountStorage()).not.toBeNull();
     expect(api.callsOf("getChats")).toHaveLength(1);
+    scheduler.stop();
+  });
+
+  test("drains the outbox during a tick and emits an outbox event for a sent row", async () => {
+    const { session, scheduler, factory, api, events } = setup();
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+    await storage.outbox.enqueue(
+      {
+        chatId: 1,
+        text: "hi",
+        important: false,
+        photoUri: null,
+        fileUri: null,
+        position: null,
+      },
+      "cid-manual",
+      Date.now(),
+    );
+
+    const outboxListener = jest.fn();
+    events.subscribeOutbox(1, outboxListener);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    expect(api.postMessageCalls).toEqual([
+      { chatId: 1, text: "hi", important: false },
+    ]);
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+    expect(outboxListener).toHaveBeenCalled();
+    scheduler.stop();
+  });
+
+  test("enqueueMessage stores a row, emits an outbox event, and sends it without waiting for the next tick", async () => {
+    const { session, scheduler, factory, api, events } = setup(60_000); // long interval: only flushOutbox should send it
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+
+    const outboxListener = jest.fn();
+    events.subscribeOutbox(1, outboxListener);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    await scheduler.enqueueMessage(1, "hello");
+    await flush(80);
+
+    expect(api.postMessageCalls).toEqual([
+      { chatId: 1, text: "hello", important: false },
+    ]);
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+    expect(outboxListener).toHaveBeenCalled();
+    scheduler.stop();
+  });
+
+  test("enqueueMessage throws when there is no active account", async () => {
+    const { scheduler } = setup();
+    await expect(scheduler.enqueueMessage(1, "hi")).rejects.toThrow();
+  });
+
+  test("disposes the outbox service on sign-out", async () => {
+    const { session, scheduler, factory, api } = setup();
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    session.setState({ status: "signed_out" });
+    await flush();
+
+    // No active account: enqueueMessage must throw rather than silently queuing into nothing.
+    await expect(scheduler.enqueueMessage(1, "hi")).rejects.toThrow();
+    scheduler.stop();
+  });
+
+  test("polls the chat immediately after a successful send instead of waiting for the next tick", async () => {
+    const { session, scheduler, factory, api, events } = setup(60_000); // long interval: only the immediate poll should fetch it
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+
+    const messageListener = jest.fn();
+    events.subscribeMessages(1, messageListener);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    const callsBeforeSend = api.callsOf("getMessages").length;
+    // The server already has the message by the time the immediate poll runs, since
+    // postMessage already resolved before onSent fires.
+    api.messages.set(1, [
+      {
+        id: 1,
+        userid: "a",
+        userNick: null,
+        userFullname: null,
+        userHash: null,
+        serverTime: null,
+        important: false,
+        text: "hello",
+        photoId: null,
+        fileId: null,
+        position: null,
+      },
+    ]);
+
+    await scheduler.enqueueMessage(1, "hello");
+    await flush(80);
+
+    expect(api.callsOf("getMessages").length).toBeGreaterThan(callsBeforeSend);
+    expect(await storage.messages.get(1, 1)).not.toBeNull();
+    expect(messageListener).toHaveBeenCalled();
     scheduler.stop();
   });
 });

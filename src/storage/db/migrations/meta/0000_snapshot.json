@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "40e658b6-726a-4742-8f32-2464921e0e4e",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "6a8761f4-e3cf-41ac-a2ea-d85231f0cd40",
+  "prevId": "40e658b6-726a-4742-8f32-2464921e0e4e",
   "tables": {
     "chat_members": {
       "name": "chat_members",
@@ -35,22 +35,15 @@
           "name": "chat_members_chat_id_chats_id_fk",
           "tableFrom": "chat_members",
           "tableTo": "chats",
-          "columnsFrom": [
-            "chat_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "chat_members_chat_id_userid_pk": {
-          "columns": [
-            "chat_id",
-            "userid"
-          ],
+          "columns": ["chat_id", "userid"],
           "name": "chat_members_chat_id_userid_pk"
         }
       },
@@ -167,6 +160,124 @@
         }
       }
     },
+    "outbox": {
+      "name": "outbox",
+      "columns": {
+        "client_message_id": {
+          "name": "client_message_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "photo_uri": {
+          "name": "photo_uri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "file_uri": {
+          "name": "file_uri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "important": {
+          "name": "important",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "next_retry_at": {
+          "name": "next_retry_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "outbox_status_next_retry_idx": {
+          "name": "outbox_status_next_retry_idx",
+          "columns": ["status", "next_retry_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "outbox_chat_id_chats_id_fk": {
+          "name": "outbox_chat_id_chats_id_fk",
+          "tableFrom": "outbox",
+          "tableTo": "chats",
+          "columnsFrom": ["chat_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "outbox_status_check": {
+          "name": "outbox_status_check",
+          "value": "status in ('pending', 'sending', 'failed')"
+        }
+      }
+    },
     "profiles": {
       "name": "profiles",
       "columns": {
@@ -216,9 +327,7 @@
       "indexes": {
         "profiles_hash_unique": {
           "name": "profiles_hash_unique",
-          "columns": [
-            "hash"
-          ],
+          "columns": ["hash"],
           "isUnique": true
         }
       },
@@ -329,22 +438,15 @@
           "name": "raw_messages_chat_id_chats_id_fk",
           "tableFrom": "raw_messages",
           "tableTo": "chats",
-          "columnsFrom": [
-            "chat_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "raw_messages_chat_id_id_pk": {
-          "columns": [
-            "chat_id",
-            "id"
-          ],
+          "columns": ["chat_id", "id"],
           "name": "raw_messages_chat_id_id_pk"
         }
       },

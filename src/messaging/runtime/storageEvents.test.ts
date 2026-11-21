@@ -58,4 +58,40 @@ describe("StorageEvents", () => {
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledTimes(1);
   });
+
+  test("outbox bus is scoped per chat id and does not cross-fire", () => {
+    const events = new StorageEvents();
+    const forChat1 = jest.fn();
+    const forChat2 = jest.fn();
+    events.subscribeOutbox(1, forChat1);
+    events.subscribeOutbox(2, forChat2);
+    events.emitOutbox(1);
+    expect(forChat1).toHaveBeenCalledTimes(1);
+    expect(forChat2).not.toHaveBeenCalled();
+  });
+
+  test("subscribeOutbox works even when emitOutbox for that id was never called before", () => {
+    const events = new StorageEvents();
+    const listener = jest.fn();
+    expect(() => events.subscribeOutbox(42, listener)).not.toThrow();
+    events.emitOutbox(42);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  test("emitting outbox with no subscribers is fine", () => {
+    const events = new StorageEvents();
+    expect(() => events.emitOutbox(99)).not.toThrow();
+  });
+
+  test("unsubscribing the last outbox listener for a chat id drops its bus, a later subscriber starts fresh", () => {
+    const events = new StorageEvents();
+    const first = jest.fn();
+    const unsubscribe = events.subscribeOutbox(5, first);
+    unsubscribe();
+    const second = jest.fn();
+    events.subscribeOutbox(5, second);
+    events.emitOutbox(5);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
 });

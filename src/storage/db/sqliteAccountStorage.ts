@@ -1,21 +1,26 @@
-import { deleteAccountDatabase, openAccountDatabase } from './openDatabase';
-import { SqliteChatRepository } from './sqliteChatRepository';
-import { SqliteMessageRepository } from './sqliteMessageRepository';
-import { SqliteProfileRepository } from './sqliteProfileRepository';
-import type { SqliteDb } from './types';
-import type { AccountStorage, AccountStorageFactory } from '../ports';
+import type { AccountStorage, AccountStorageFactory } from "../ports";
+import { deleteAccountDatabase, openAccountDatabase } from "./openDatabase";
+import { SqliteChatRepository } from "./sqliteChatRepository";
+import { SqliteMessageRepository } from "./sqliteMessageRepository";
+import { SqliteOutboxRepository } from "./sqliteOutboxRepository";
+import { SqliteProfileRepository } from "./sqliteProfileRepository";
+import type { SqliteDb } from "./types";
 
 /**
  * Composes the SQLite repositories over one connection. `close` releases the shared handle
  * returned by `openAccountDatabase`, so concurrent users of the same account share the open.
  */
-export function createSqliteAccountStorage(db: SqliteDb, close: () => Promise<void>): AccountStorage {
-    return {
-        chats: new SqliteChatRepository(db),
-        profiles: new SqliteProfileRepository(db),
-        messages: new SqliteMessageRepository(db),
-        close,
-    };
+export function createSqliteAccountStorage(
+  db: SqliteDb,
+  close: () => Promise<void>,
+): AccountStorage {
+  return {
+    chats: new SqliteChatRepository(db),
+    profiles: new SqliteProfileRepository(db),
+    messages: new SqliteMessageRepository(db),
+    outbox: new SqliteOutboxRepository(db),
+    close,
+  };
 }
 
 /**
@@ -23,17 +28,17 @@ export function createSqliteAccountStorage(db: SqliteDb, close: () => Promise<vo
  * the SQLite backend that may import `openDatabase`.
  */
 export class SqliteAccountStorageFactory implements AccountStorageFactory {
-    async open(accountId: string): Promise<AccountStorage> {
-        const { db, close } = await openAccountDatabase(accountId);
-        return createSqliteAccountStorage(db, close);
-    }
+  async open(accountId: string): Promise<AccountStorage> {
+    const { db, close } = await openAccountDatabase(accountId);
+    return createSqliteAccountStorage(db, close);
+  }
 
-    async destroy(accountId: string): Promise<void> {
-        await deleteAccountDatabase(accountId);
-    }
+  async destroy(accountId: string): Promise<void> {
+    await deleteAccountDatabase(accountId);
+  }
 }
 
 /** Entry point for the lazy dynamic import in `accountStorage.ts`. */
 export function createSqliteFactory(): AccountStorageFactory {
-    return new SqliteAccountStorageFactory();
+  return new SqliteAccountStorageFactory();
 }

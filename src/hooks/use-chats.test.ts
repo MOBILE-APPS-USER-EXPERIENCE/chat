@@ -4,6 +4,7 @@ import { act, create } from "react-test-renderer";
 import { MemoryAccountStorageFactory } from "../storage/memory";
 import type { AccountStorage } from "../storage/ports";
 import type { ChatSnapshot } from "../storage/types";
+import * as runtimeModule from "../messaging/runtime";
 import { useChats } from "./use-chats";
 
 type RuntimeModule = typeof import("../messaging/runtime");
@@ -45,7 +46,6 @@ jest.mock("../messaging/runtime", () => {
   };
 });
 
-import * as runtimeModule from "../messaging/runtime";
 const runtimeMock = runtimeModule as unknown as RuntimeMock;
 
 const flush = async (): Promise<void> => {

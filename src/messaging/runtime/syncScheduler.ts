@@ -1,6 +1,7 @@
 // Type-only import of the storage port: no runtime value from `src/storage` is pulled in, and
 // `src/messaging/ports.ts` already type-imports `AccountStorage` the same way.
 import type { AccountStorage } from "../../storage/ports";
+import { OutboxService, type OutboxDeps } from "../outboxService";
 import type {
   CycleOptions,
   CycleResult,
@@ -32,6 +33,8 @@ export type SchedulerDeps = {
   now: () => number;
   isNetworkError: (error: unknown) => boolean;
   onInvalidToken: () => void;
+  /** Generates the local id for a newly enqueued outbox row. */
+  newId: () => string;
   intervalMs?: number;
   syncConfig?: Partial<SyncConfig>;
 };
@@ -52,10 +55,11 @@ export type SyncRuntimeStatus = {
 };
 
 /**
- * Orchestrates one `SyncService` per signed-in account: opens/closes storage as the session
- * changes, runs cycles on an interval while the app is in the foreground, and republishes the
- * outcome through `StorageEvents`. No Expo/React imports; everything that touches a platform or a
- * singleton is injected.
+ * Orchestrates one `SyncService` and one `OutboxService` per signed-in account: opens/closes
+ * storage as the session changes, runs cycles on an interval while the app is in the
+ * foreground, drains the outbox alongside each cycle, and republishes the outcome through
+ * `StorageEvents`. No Expo/React imports; everything that touches a platform or a singleton is
+ * injected.
  */
 export class SyncScheduler {
   private readonly intervalMs: number;
@@ -66,9 +70,11 @@ export class SyncScheduler {
   private currentAccountId: string | null = null;
   private storage: AccountStorage | null = null;
   private syncService: SyncService | null = null;
+  private outboxService: OutboxService | null = null;
   private openChatId: number | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
+  private outboxInFlight = false;
   private sessionUnsub: (() => void) | null = null;
   private foregroundUnsub: (() => void) | null = null;
   private statusSnapshot: SyncRuntimeStatus = {
@@ -105,12 +111,15 @@ export class SyncScheduler {
     this.foregroundUnsub?.();
     this.foregroundUnsub = null;
     const service = this.syncService;
+    const outboxService = this.outboxService;
     const storage = this.storage;
     this.syncService = null;
+    this.outboxService = null;
     this.storage = null;
     this.currentAccountId = null;
     this.resetStatus();
     if (service !== null) service.dispose();
+    if (outboxService !== null) outboxService.dispose();
     if (storage !== null) {
       void storage.close().catch(() => {
         // Best-effort close during teardown; the caller is tearing the app down anyway.
@@ -157,6 +166,30 @@ export class SyncScheduler {
     return result;
   }
 
+  /**
+   * Enqueues one text message for the active account and immediately kicks off a send attempt.
+   * Throws (plain `Error`) when there is no active account storage yet, or when `text` is empty
+   * after trimming — the caller (the composer UI) shows this to the user.
+   */
+  async enqueueMessage(chatId: number, text: string): Promise<void> {
+    if (this.outboxService === null) {
+      throw new Error("No active account to enqueue a message into");
+    }
+    await this.outboxService.enqueue(chatId, text);
+    this.deps.events.emitOutbox(chatId);
+    this.flushOutbox(chatId);
+  }
+
+  /**
+   * Fires an immediate outbox drain. Fire-and-forget: callers must not await this. `chatId` is
+   * accepted for a future chat-scoped drain; `OutboxService.drain()` currently processes every
+   * due row across all chats regardless, so the parameter has no effect yet.
+   */
+  flushOutbox(chatId?: number): void {
+    void chatId;
+    void this.runOutboxDrain(this.generation);
+  }
+
   // ---- session / foreground transitions --------------------------------------------------
 
   private async handleSessionChange(): Promise<void> {
@@ -170,13 +203,16 @@ export class SyncScheduler {
     const generation = this.generation;
     this.clearTimer();
     const previousService = this.syncService;
+    const previousOutboxService = this.outboxService;
     const previousStorage = this.storage;
     this.syncService = null;
+    this.outboxService = null;
     this.storage = null;
     this.currentAccountId = nextAccountId;
     this.resetStatus();
 
     if (previousService !== null) previousService.dispose();
+    if (previousOutboxService !== null) previousOutboxService.dispose();
     if (previousStorage !== null) {
       try {
         await previousStorage.close();
@@ -251,14 +287,34 @@ export class SyncScheduler {
     const result = await this.syncService.runCycle(opts);
     if (this.stopped || generation !== this.generation) return;
     this.applyCycleResult(result);
+    // The outbox is drained alongside the sync cycle, not as part of it: an unexpected outbox
+    // failure is caught inside `runOutboxDrain` and must never abort chat polling.
+    await this.runOutboxDrain(generation);
+  }
+
+  private async runOutboxDrain(generation: number): Promise<void> {
+    if (this.stopped || generation !== this.generation) return;
+    if (this.outboxService === null) return;
+    if (this.outboxInFlight) return; // a drain is already running; this call is redundant
+    this.outboxInFlight = true;
+    try {
+      await this.outboxService.drain();
+    } catch {
+      // `drain()` writes ordinary send failures as 'failed' rows and never throws for them;
+      // only a genuinely unexpected storage error reaches here. Swallow it so a broken outbox
+      // never blocks chat polling — the next tick or flushOutbox() call retries.
+    } finally {
+      this.outboxInFlight = false;
+    }
   }
 
   private async tryOpen(generation: number): Promise<boolean> {
     const accountId = this.currentAccountId;
     if (accountId === null || this.stopped || generation !== this.generation)
       return false;
+    let storage: AccountStorage | null = null;
     try {
-      const storage = await this.deps.openAccountStorage(accountId);
+      storage = await this.deps.openAccountStorage(accountId);
       if (this.stopped || generation !== this.generation) {
         await storage.close().catch(() => {
           // Superseded while opening: discard this handle; the next open starts clean.
@@ -276,13 +332,53 @@ export class SyncScheduler {
       };
       if (this.deps.syncConfig !== undefined)
         serviceDeps.config = this.deps.syncConfig;
+      const syncService = new SyncService(serviceDeps);
+
+      const outboxDeps: OutboxDeps = {
+        api,
+        storage,
+        now: this.deps.now,
+        isCurrent: () => this.isCurrentAccount(accountId, generation),
+        isNetworkError: this.deps.isNetworkError,
+        onInvalidToken: this.deps.onInvalidToken,
+        newId: this.deps.newId,
+        onRowChanged: (chatId) => this.deps.events.emitOutbox(chatId),
+        // Shrinks the gap between the optimistic row disappearing and the real message showing
+        // up: instead of waiting for the next ~5s cycle, poll this one chat right away. Reuses
+        // `pollNow`, which already serializes with cycle polls of the same chat and only emits
+        // `emitMessages` when something was actually inserted. Fire-and-forget: a slow or
+        // failing poll must not delay draining the next outbox row.
+        onSent: (chatId) => {
+          void this.pollNow(chatId);
+        },
+      };
+      const outboxService = new OutboxService(outboxDeps);
+      // Recovers rows left 'sending' by a crash mid-send. Treated the same as a failed storage
+      // open on failure: discard everything constructed so far and retry on the next tick.
+      await outboxService.init();
+      if (this.stopped || generation !== this.generation) {
+        outboxService.dispose();
+        syncService.dispose();
+        await storage.close().catch(() => {
+          // Superseded while initializing the outbox: discard cleanly.
+        });
+        return false;
+      }
+
       this.storage = storage;
-      this.syncService = new SyncService(serviceDeps);
+      this.syncService = syncService;
+      this.outboxService = outboxService;
       return true;
     } catch {
+      if (storage !== null) {
+        await storage.close().catch(() => {
+          // Best-effort cleanup after a failed open/init; nothing was assigned yet.
+        });
+      }
       if (this.stopped || generation !== this.generation) return false;
-      // Opening storage or building the sync api failed; keep the scheduler alive and
-      // retry later (next interval tick while foreground, or the next foreground transition).
+      // Opening storage, building the sync api, or initializing the outbox failed; keep the
+      // scheduler alive and retry later (next interval tick while foreground, or the next
+      // foreground transition).
       this.setStatus("storage_error");
       return false;
     }

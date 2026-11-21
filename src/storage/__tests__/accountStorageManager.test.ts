@@ -18,6 +18,7 @@ function fakeStorage(tag: string): AccountStorage {
         chats: null as never,
         profiles: null as never,
         messages: null as never,
+        outbox: null as never,
         close: async () => undefined,
         ...({ tag } as Record<string, unknown>),
     } as AccountStorage;

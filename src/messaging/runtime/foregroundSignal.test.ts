@@ -1,5 +1,8 @@
 /** @jest-environment node */
 
+import { AppState } from "react-native";
+import { createForegroundSignal } from "./foregroundSignal";
+
 // babel-plugin-jest-hoist forbids variable access inside jest.mock factories except in type
 // positions; the `state` parameter name of an inline function type counts as a variable access,
 // so the listener type lives in this alias (type references are erased at runtime).
@@ -20,9 +23,6 @@ jest.mock("react-native", () => {
   };
   return { AppState: appState };
 });
-
-import { AppState } from "react-native";
-import { createForegroundSignal } from "./foregroundSignal";
 
 type MockAppState = typeof AppState & { __emit: (state: string) => void };
 const mockAppState = AppState as MockAppState;
