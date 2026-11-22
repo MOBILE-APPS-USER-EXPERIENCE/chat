@@ -1,0 +1,8 @@
+export { Check } from './Check'
+export { ChevronLeft } from './ChevronLeft'
+export { ClockFading } from './ClockFading'
+export { CloudUpload } from './CloudUpload'
+export { MessagesCircle } from './MessagesCircle'
+export { OctagonX } from './OctagonX'
+export { SendHorizontal } from './SendHorizontal'
+export { User } from './User'

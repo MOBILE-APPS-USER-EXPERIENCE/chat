@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Build-Stage ----------
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 # Build-Tools für native Node-Module (z. B. reanimated/worklets Metadaten)
 RUN apk add --no-cache python3 make g++

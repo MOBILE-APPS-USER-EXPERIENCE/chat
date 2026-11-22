@@ -1,42 +1,31 @@
-import { request, setAdminKey, setToken } from './apiClient';
+import { ApiContext, request } from './apiClient';
 
 export type AuthResult = { token: string; hash: string; message: string; };
+type AuthResponse = AuthResult & { code: number; status: 'ok'; };
 
 export async function register(
-    userid: string, password: string, nickname: string, fullname: string,
+    ctx: ApiContext, userid: string, password: string, nickname: string, fullname: string,
 ): Promise<AuthResult> {
-    const res = await request<AuthResult & { code: number; status: 'ok'; }>(
-        'register', { userid, password, nickname, fullname }, { includeToken: false },
+    return request<AuthResponse>(
+        'register', { userid, password, nickname, fullname }, { includeToken: false, context: ctx },
     );
-    await setToken(res.token);
-    return res;
 }
 
-export async function login(userid: string, password: string): Promise<AuthResult> {
-    const res = await request<AuthResult & { code: number; status: 'ok'; }>(
-        'login', { userid, password }, { includeToken: false },
+export async function login(ctx: ApiContext, userid: string, password: string): Promise<AuthResult> {
+    return request<AuthResponse>('login', { userid, password }, { includeToken: false, context: ctx });
+}
+
+export async function logout(ctx: ApiContext, options: { timeoutMs?: number } = {}): Promise<void> {
+    await request('logout', {}, { context: ctx, timeoutMs: options.timeoutMs });
+}
+
+export async function deregister(ctx: ApiContext): Promise<void> {
+    await request('deregister', {}, { context: ctx });
+}
+
+export async function validateToken(ctx: ApiContext): Promise<boolean> {
+    const res = await request<{ status: 'ok'; code: number; message: string; }>(
+        'validatetoken', {}, { context: ctx },
     );
-    await setToken(res.token);
-    return res;
-}
-
-export async function logout(): Promise<void> {
-    await request('logout', {});
-    await setToken(undefined);
-    await setAdminKey(undefined);
-}
-
-export async function deregister(): Promise<void> {
-    await request('deregister', {});
-    await setToken(undefined);
-    await setAdminKey(undefined);
-}
-
-export async function validateToken(): Promise<boolean> {
-    const res = await request<{ status: 'ok'; code: number; message: string; }>('validatetoken', {});
     return res.message === 'Token valid';
-}
-
-export async function unlockAdmin(key: string): Promise<void> {
-    await setAdminKey(key);
 }

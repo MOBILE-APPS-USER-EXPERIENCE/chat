@@ -16,11 +16,17 @@
 
 - Consistent error handling via a single `ApiError` class (`code`, `message`)
 
-- Persistent state for token, admin key, and base URL via `AsyncStorage`, ensuring login status, admin mode, and server configuration persist across application restarts
+- Stateless client: `apiClient.ts` holds no persistence. Every call resolves an `ApiContext` (`baseUrl`, `token`, `adminKey`, extra `headers`) once at its start, either from `options.context` or from the active context set by the session layer (`setActiveContext`). Without a context it throws `NoApiContextError`; network failures and timeouts become `NetworkError` (never containing URL, token or key); non-JSON bodies become `ApiError(status, 'Invalid server response')`.
+
+- **Servers:** The default and backup server are independent instances with separate user databases. There is no failover: a token only works on the server that issued it. Server list, accounts, token and admin key live in `src/storage` and are managed by `src/session`.
+
+- **Access header:** `X-Access-Token` (from `EXPO_PUBLIC_X_ACCESS_TOKEN`) is added by `src/session/serverHeaders.ts` to the context of the default server only. It is not a secret because `EXPO_PUBLIC_*` values end up in the client bundle.
+
+- Admin key: `session.unlockAdmin(key)` stores it per account; the server validates it on the first admin call. On error 459 the caller should call `session.lockAdmin()`.
 
 2. **Business Services**, one file per domain, all built on top of the core client:
 
-- `authService.ts` (register, login, logout, deregister, validateToken, unlock admin key)
+- `authService.ts`: all functions take an explicit `ApiContext` first and do no persistence. `unlockAdmin` is gone.
 
 - `messageService.ts` (postMessage, getMessages, getPhoto, getFile)
 
@@ -30,9 +36,11 @@
 
 - `userService.ts` (getProfiles)
 
-- `serverService.ts` (ping)
+- `connectivityService.ts` (ping, pingContext)
 
-- `adminService.ts` (resetUser, deleteUser, clear) including automatic reset of the admin key if the key is invalid (error code 459)
+- `serverSettings.ts` moved to `src/session`.
+
+- `adminService.ts` (resetUser, deleteUser, clear)
 
 3. **Common types (`types.ts`)**, manually derived from the specification instead of generated, including cleanup of redundant schemas (`Profile`/`ChatParticipant` -> common `User` type).
 
