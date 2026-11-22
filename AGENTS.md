@@ -56,8 +56,10 @@ This file is for AI agents **and** humans. Humans own every line that lands in t
   account database under `src/storage/db/` (Drizzle sync driver, one database per account,
   backend selected at runtime: SQLite, or memory degradation on web)
 - `src/components/` – reusable UI (e.g. `confirm-dialog.tsx`)
-- `src/constants/layout.ts` – `Spacing` scale
+- `src/config/layout.ts` – `Spacing` scale
+- `src/messaging/` – polling and outbox services
 - `src/hooks/`, `src/utils/` – hooks and helpers
+- `src/components/auth/` – authentication UI components
 - `src/tamagui.config.ts` – theme and tokens
 - `docs/adr/` – decisions; `docs/ai-use/` – documentation of AI-assisted design work
 - `export_issues.md` – snapshot of the backlog. The issue tracker is the source of truth.
@@ -109,7 +111,7 @@ Expo ships breaking changes every SDK release. Before touching an Expo/EAS/React
 - Colors come from theme keys defined in `src/tamagui.config.ts`
   (`background`, `backgroundElement`, `backgroundSelected`, `text`, `textSecondary`,
   `accent`, `accentContrast`, `error`, `errorBackground`, `errorText`).
-  Spacing comes from `Spacing` in `src/constants/layout.ts`. Do not add new hex/rgba values.
+  Spacing comes from `Spacing` in `src/config/layout.ts`. Do not add new hex/rgba values.
 - Use the prop style already used in screens (`items`, `justify`, `px`, `self`, `backgroundColor`, ...).
   Do not mix in the old `alignItems` / `justifyContent`.
 - No `StyleSheet.create`, no inline `style={{}}`, no RN `View`/`Text`/`TextInput`/`Pressable`.
@@ -117,7 +119,10 @@ Expo ships breaking changes every SDK release. Before touching an Expo/EAS/React
 - No new "themed-*" wrapper components.
 - No `Platform.OS` checks and no `.ios`/`.android` files, except `expo-haptics` calls and
   `use-color-scheme.web.ts`.
-- Icons: `@tamagui/lucide-icons` only.
+- Exception: `isWeb from tamagui` is allowed for (1) Enter-to-send in the chat composer,
+  (2) FAB/header placement of the new-chat button.
+- Icons are generated into `src/components/icons` with `npm run add:icon`; do not add
+  `@tamagui/lucide-icons` imports.
 - Destructive actions (delete, reset, clear) need a confirmation via `ConfirmDialog`.
 
 ## Features beyond the API (client conventions)

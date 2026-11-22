@@ -45,6 +45,10 @@ iterated on with human feedback; it was not accepted automatically.
   idempotency key. Retrying an uncertain send can therefore create duplicates.
 - The outbox sends rows per chat in enqueue order, blocking later rows in that
   chat until earlier rows succeed or become retryable; duplicate risk is unchanged.
+- Sending is claimed atomically: `markSending` accepts both pending and failed rows,
+  returns whether it transitioned a row, and prevents discarded or already-sending
+  rows from being posted.
+- A timeout on `postmessage` can abort a request after the server has already stored it, so an automatic retry may create a duplicate; the default timeout is slightly larger for binary requests but the accepted duplicate risk remains unchanged.
 - Public-chat browsing and joining is a separate planned feature that can later
   be reused for laboratory groups; it does not itself implement their
   course-to-subgroup relationship.

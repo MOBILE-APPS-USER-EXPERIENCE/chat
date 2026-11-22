@@ -1,5 +1,6 @@
 import {
-    ApiError, NetworkError, NoApiContextError, postRequest, request, requestBinary, setActiveContext,
+    ApiError, DEFAULT_BINARY_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS, NetworkError, NoApiContextError,
+    postRequest, request, requestBinary, setActiveContext,
 } from '../apiClient';
 
 const fetchMock = jest.fn<Promise<Response>, [string, RequestInit?]>();
@@ -50,6 +51,7 @@ beforeEach(() => {
 afterEach(() => {
     globalThis.fetch = realFetch;
     setActiveContext(null);
+    jest.useRealTimers();
 });
 
 describe('request', () => {
@@ -131,6 +133,38 @@ describe('request', () => {
         expect((error as Error).message).not.toMatch(/a\.example|tok-a/);
     });
 
+    it('aborts a hung request after the default timeout with NetworkError', async () => {
+        jest.useFakeTimers();
+        fetchMock.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+                reject(Object.assign(new Error('aborted https://a.example/?token=tok-a'), { name: 'AbortError' }));
+            });
+        }));
+
+        const pending = rejection(request('getchats'));
+        jest.advanceTimersByTime(DEFAULT_REQUEST_TIMEOUT_MS);
+        const error = await pending;
+        expect(error).toBeInstanceOf(NetworkError);
+        expect((error as Error).message).toBe('Request timed out');
+        expect((error as Error).message).not.toMatch(/a\.example|tok-a/);
+    });
+
+    it('uses an explicit timeoutMs instead of the request default', async () => {
+        jest.useFakeTimers();
+        const setTimeoutSpy = jest.spyOn(globalThis, 'setTimeout');
+        fetchMock.mockResolvedValue(ok());
+
+        await request('ping', {}, { timeoutMs: 1234 });
+        expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1234);
+        setTimeoutSpy.mockRestore();
+    });
+
+    it('uses no-store cache policy for GET requests', async () => {
+        fetchMock.mockResolvedValue(ok());
+        await request('getchats');
+        expect(call().init.cache).toBe('no-store');
+    });
+
     it('turns a fetch rejection into NetworkError without URL or token in the message', async () => {
         fetchMock.mockRejectedValue(new TypeError('Failed to fetch https://a.example/chat/?token=tok-a'));
         const error = await rejection(request('ping'));
@@ -155,6 +189,7 @@ describe('postRequest', () => {
         const { base, init } = call();
         expect(base).toBe('https://a.example/chat/');
         expect(init.method).toBe('POST');
+        expect(init.cache).toBe('no-store');
         expect(init.headers).toEqual({ 'Content-Type': 'application/json', 'X-Access-Token': 'abc' });
         expect(JSON.parse(init.body as string)).toEqual({ request: 'postmessage', token: 'tok-a', text: 'hi', chatid: 0 });
     });
@@ -167,6 +202,18 @@ describe('requestBinary', () => {
         const result = await requestBinary('getphoto', { photoid: 'p1' });
         expect(result).toEqual({ blob, contentType: 'image/png', contentDisposition: 'attachment; filename="a.png"' });
         expect(call().query.get('token')).toBe('tok-a');
+        expect(call().init.cache).toBe('no-store');
+    });
+
+    it('uses a binary timeout larger than the request default', async () => {
+        jest.useFakeTimers();
+        const setTimeoutSpy = jest.spyOn(globalThis, 'setTimeout');
+        fetchMock.mockResolvedValue(fakeResponse({ size: 3 }, { contentType: 'image/png' }));
+
+        await requestBinary('getphoto', { photoid: 'p1' });
+        expect(DEFAULT_BINARY_TIMEOUT_MS).toBeGreaterThan(DEFAULT_REQUEST_TIMEOUT_MS);
+        expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), DEFAULT_BINARY_TIMEOUT_MS);
+        setTimeoutSpy.mockRestore();
     });
 
     it('turns a JSON error body into ApiError', async () => {

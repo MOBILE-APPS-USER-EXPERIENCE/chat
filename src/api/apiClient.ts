@@ -31,7 +31,7 @@ export type RequestOptions = {
     includeToken?: boolean;               // default true
     includeAdminKey?: boolean;            // default false
     context?: ApiContext;                 // default: the active context
-    timeoutMs?: number;                   // default: none
+    timeoutMs?: number;                   // defaults by request kind
 };
 
 export type BinaryResult = {
@@ -45,6 +45,8 @@ type StatusResponse = { status: 'ok' | 'error'; message?: string; code: number; 
 type BodyOptions = Pick<RequestOptions, 'context' | 'timeoutMs'>;
 
 const INVALID_RESPONSE = 'Invalid server response';
+export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+export const DEFAULT_BINARY_TIMEOUT_MS = 60_000;
 
 // Plain module state, no storage: the session layer decides what is active.
 let activeContext: ApiContext | null = null;
@@ -102,7 +104,9 @@ async function execute<R>(
     try {
         let response: Response;
         try {
-            response = await fetch(url, controller ? { ...init, signal: controller.signal } : init);
+            // Prevent stale GET/POST/binary responses and browser disk-cache reuse.
+            const fetchInit: RequestInit = { ...init, cache: 'no-store' };
+            response = await fetch(url, controller ? { ...fetchInit, signal: controller.signal } : fetchInit);
         } catch {
             // The original error is dropped on purpose: its message can contain the URL (and the token).
             throw new NetworkError(controller?.signal.aborted ? 'Request timed out' : 'Network request failed');
@@ -151,7 +155,7 @@ export async function request<T extends StatusResponse>(
     const { includeToken = true, includeAdminKey = false, context, timeoutMs } = options;
     const ctx = resolveContext(context);
     const url = buildGetUrl(ctx, command, params, includeToken, includeAdminKey);
-    return execute(url, { headers: { ...ctx.headers } }, timeoutMs, (response) => readApiJson<T>(response));
+    return execute(url, { headers: { ...ctx.headers } }, timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, (response) => readApiJson<T>(response));
 }
 
 export async function postRequest<T extends StatusResponse>(
@@ -165,7 +169,7 @@ export async function postRequest<T extends StatusResponse>(
         headers: { 'Content-Type': 'application/json', ...ctx.headers },
         body: JSON.stringify({ request: command, token: ctx.token, ...body }),
     };
-    return execute(`${trimTrailingSlashes(ctx.baseUrl)}/`, init, options.timeoutMs, (response) => readApiJson<T>(response));
+    return execute(`${trimTrailingSlashes(ctx.baseUrl)}/`, init, options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, (response) => readApiJson<T>(response));
 }
 
 export async function requestBinary(
@@ -175,7 +179,7 @@ export async function requestBinary(
 ): Promise<BinaryResult> {
     const ctx = resolveContext(options.context);
     const url = buildGetUrl(ctx, command, params, true, false);
-    return execute(url, { headers: { ...ctx.headers } }, options.timeoutMs, async (response) => {
+    return execute(url, { headers: { ...ctx.headers } }, options.timeoutMs ?? DEFAULT_BINARY_TIMEOUT_MS, async (response) => {
         const contentType = response.headers.get('content-type');
         // A JSON body on a binary endpoint is an error response.
         if (contentType?.includes('application/json')) throwApiError(await readJson(response));

@@ -16,6 +16,8 @@
 
 - Consistent error handling via a single `ApiError` class (`code`, `message`)
 
+- Request timeouts: regular GET and POST calls default to 15,000 ms (`DEFAULT_REQUEST_TIMEOUT_MS`), binary calls default to 60,000 ms (`DEFAULT_BINARY_TIMEOUT_MS`), and callers may override the timeout with `timeoutMs`. Fetches use `cache: 'no-store'` for GET, POST and binary requests to avoid stale or disk-cached responses, especially for chat/message polling.
+
 - Stateless client: `apiClient.ts` holds no persistence. Every call resolves an `ApiContext` (`baseUrl`, `token`, `adminKey`, extra `headers`) once at its start, either from `options.context` or from the active context set by the session layer (`setActiveContext`). Without a context it throws `NoApiContextError`; network failures and timeouts become `NetworkError` (never containing URL, token or key); non-JSON bodies become `ApiError(status, 'Invalid server response')`.
 
 - **Servers:** The default and backup server are independent instances with separate user databases. There is no failover: a token only works on the server that issued it. Server list, accounts, token and admin key live in `src/storage` and are managed by `src/session`.
