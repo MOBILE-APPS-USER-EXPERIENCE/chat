@@ -140,8 +140,11 @@ export interface OutboxRepository {
     clientMessageId: string,
     now: number,
   ): Promise<OutboxRow>;
-  /** Transitions pending -> sending. A no-op (does not throw) if the row is not pending or unknown. */
-  markSending(clientMessageId: string): Promise<void>;
+  /**
+   * Transitions pending or failed -> sending.
+   * Returns true only when this call performed the transition; false for unknown or already-sending rows.
+   */
+  markSending(clientMessageId: string): Promise<boolean>;
   /** Transitions sending -> failed with the given message and next retry time. Unknown id: no-op. */
   markFailed(
     clientMessageId: string,

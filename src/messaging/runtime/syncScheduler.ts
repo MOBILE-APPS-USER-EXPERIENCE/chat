@@ -74,8 +74,7 @@ export class SyncScheduler {
   private openChatId: number | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
-  private outboxInFlight = false;
-  private outboxDirty = false;
+  private outboxDrainState: { inFlight: boolean; dirty: boolean } | null = null;
   private sessionUnsub: (() => void) | null = null;
   private foregroundUnsub: (() => void) | null = null;
   private statusSnapshot: SyncRuntimeStatus = {
@@ -188,7 +187,8 @@ export class SyncScheduler {
    */
   flushOutbox(chatId?: number): void {
     void chatId;
-    this.outboxDirty = true;
+    if (this.outboxService === null || this.outboxDrainState === null) return;
+    this.outboxDrainState.dirty = true;
     void this.runOutboxDrain(this.generation);
   }
 
@@ -214,6 +214,7 @@ export class SyncScheduler {
     const previousStorage = this.storage;
     this.syncService = null;
     this.outboxService = null;
+    this.outboxDrainState = null;
     this.storage = null;
     this.currentAccountId = nextAccountId;
     this.resetStatus();
@@ -293,35 +294,52 @@ export class SyncScheduler {
       return;
     const opts: CycleOptions = {};
     if (this.openChatId !== null) opts.openChatId = this.openChatId;
-    const result = await this.syncService.runCycle(opts);
+    let result: CycleResult;
+    try {
+      result = await this.syncService.runCycle(opts);
+    } catch (error) {
+      await this.runOutboxDrain(generation);
+      throw error;
+    }
     if (this.stopped || generation !== this.generation) return;
     this.applyCycleResult(result);
-    // The outbox is drained alongside the sync cycle, not as part of it: an unexpected outbox
-    // failure is caught inside `runOutboxDrain` and must never abort chat polling.
-    await this.runOutboxDrain(generation);
+    if (result.status === "ok") {
+      // The outbox is drained alongside an ok sync cycle, not alongside token/offline/aborted results.
+      await this.runOutboxDrain(generation);
+    }
   }
 
   private async runOutboxDrain(generation: number): Promise<void> {
     if (this.stopped || generation !== this.generation) return;
-    if (this.outboxService === null) return;
-    if (this.outboxInFlight) {
-      this.outboxDirty = true;
+    const service = this.outboxService;
+    const state = this.outboxDrainState;
+    if (service === null || state === null) return;
+    if (generation !== this.generation || this.outboxService !== service) return;
+    if (state.inFlight) {
+      state.dirty = true;
       return;
     }
-    this.outboxInFlight = true;
+    state.inFlight = true;
     try {
       do {
-        this.outboxDirty = false;
+        if (
+          this.stopped ||
+          generation !== this.generation ||
+          this.outboxService !== service ||
+          this.outboxDrainState !== state
+        )
+          return;
+        state.dirty = false;
         try {
-          await this.outboxService.drain();
+          await service.drain();
         } catch {
           // `drain()` writes ordinary send failures as 'failed' rows and never throws for them;
           // only a genuinely unexpected storage error reaches here. Swallow it so a broken outbox
           // never blocks chat polling — the next tick or flushOutbox() call retries.
         }
-      } while (this.outboxDirty);
+      } while (state.dirty);
     } finally {
-      this.outboxInFlight = false;
+      state.inFlight = false;
     }
   }
 
@@ -390,6 +408,7 @@ export class SyncScheduler {
       this.storage = storage;
       this.syncService = syncService;
       this.outboxService = outboxService;
+      this.outboxDrainState = { inFlight: false, dirty: false };
       return true;
     } catch {
       if (storage !== null) {

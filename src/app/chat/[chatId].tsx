@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { memo, useCallback, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform } from "react-native";
-import { Button, Spinner, Text, TextArea, XStack, YStack } from "tamagui";
+import { FlatList, KeyboardAvoidingView } from "react-native";
+import { Button, isWeb, Spinner, Text, TextArea, XStack, YStack } from "tamagui";
 
 import ConfirmDialog from "@/components/confirm-dialog";
 import Header from "@/components/header";
@@ -157,14 +157,18 @@ function PendingRow({
         <Text color="textSecondary" fontSize={11} self="flex-end">
           {formatTime(row.createdAt)}
         </Text>
-
+        {row.status === "pending" && (
+          <ClockFading color="textSecondary" size={12} aria-label="Wird gesendet" />
+        )}
         {row.status === "sending" && (
           <CloudUpload color="textSecondary" size={12} aria-label="Wird gerade gesendet" />
         )}
         {row.status === "failed" && row.lastError !== "offline" ? (
           <OctagonX color="textSecondary" size={12} aria-label="Senden fehlgeschlagen" />
         ) : (
-          <ClockFading color="textSecondary" size={12} aria-label="Wird gesendet" />
+          row.status === "failed" && (
+            <ClockFading color="textSecondary" size={12} aria-label="Keine Verbindung" />
+          )
         )}
       </XStack>
       {row.status === "failed" && (
@@ -342,11 +346,13 @@ export default function ChatScreen() {
               py={Spacing.two}
               textAlignVertical="top"
               onKeyDown={(e) => {
-                const { key, shiftKey } = e.nativeEvent as {
+                const { key, shiftKey, isComposing } = e.nativeEvent as {
                   key: string;
                   shiftKey?: boolean;
+                  isComposing?: boolean;
                 };
-                if (Platform.OS === "web" && key === "Enter" && !shiftKey) {
+                if (isComposing) return;
+                if (isWeb && key === "Enter" && !shiftKey) {
                   if ("preventDefault" in e) e.preventDefault();
                   if (canSend) void handleSend();
                 }

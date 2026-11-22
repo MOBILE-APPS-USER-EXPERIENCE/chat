@@ -68,10 +68,11 @@ export class MemoryOutboxRepository implements OutboxRepository {
     return { ...row };
   }
 
-  async markSending(clientMessageId: string): Promise<void> {
+  async markSending(clientMessageId: string): Promise<boolean> {
     const row = this.db.outbox.get(clientMessageId);
-    if (!row || row.status !== "pending") return;
+    if (!row || (row.status !== "pending" && row.status !== "failed")) return false;
     row.status = "sending";
+    return true;
   }
 
   async markFailed(

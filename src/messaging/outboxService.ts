@@ -128,7 +128,10 @@ export class OutboxService {
   private async sendOne(
     row: OutboxRow,
   ): Promise<{ stop: boolean; failedInDrain: boolean }> {
-    await this.deps.storage.outbox.markSending(row.clientMessageId);
+    const transitioned =
+      await this.deps.storage.outbox.markSending(row.clientMessageId);
+    if (!transitioned) return { stop: false, failedInDrain: false };
+    if (!this.alive()) return { stop: false, failedInDrain: false };
     let postSucceeded = false;
     try {
       await this.deps.api.postMessage(

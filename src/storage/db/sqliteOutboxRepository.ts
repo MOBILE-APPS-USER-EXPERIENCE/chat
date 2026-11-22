@@ -95,17 +95,21 @@ export class SqliteOutboxRepository implements OutboxRepository {
     });
   }
 
-  async markSending(clientMessageId: string): Promise<void> {
-    this.db
-      .update(outbox)
-      .set({ status: "sending" })
-      .where(
-        and(
-          eq(outbox.clientMessageId, clientMessageId),
-          eq(outbox.status, "pending"),
-        ),
-      )
-      .run();
+  async markSending(clientMessageId: string): Promise<boolean> {
+    return this.db.transaction((tx) => {
+      const row = tx
+        .select()
+        .from(outbox)
+        .where(eq(outbox.clientMessageId, clientMessageId))
+        .get();
+      if (!row || (row.status !== "pending" && row.status !== "failed"))
+        return false;
+      tx.update(outbox)
+        .set({ status: "sending" })
+        .where(eq(outbox.clientMessageId, clientMessageId))
+        .run();
+      return true;
+    });
   }
 
   async markFailed(

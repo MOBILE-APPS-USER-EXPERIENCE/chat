@@ -119,6 +119,37 @@ describe("OutboxService", () => {
     expect(freshApi.postMessageCalls).toHaveLength(1);
   });
 
+  it("shows a retried failed row as sending while postMessage is held", async () => {
+    const service = createService();
+    await service.enqueue(1, "hello");
+    await storage.outbox.markFailed("id-1", "offline", now);
+    const release = api.holdPost();
+    const drainPromise = service.drain();
+    for (let i = 0; i < 20 && api.callsOf("postMessage").length === 0; i++) {
+      await Promise.resolve();
+    }
+
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
+    release();
+    await drainPromise;
+  });
+
+  it("does not post a due row discarded after listDue but before its turn", async () => {
+    const service = createService();
+    await service.enqueue(1, "discard me");
+    const originalListDue = storage.outbox.listDue.bind(storage.outbox);
+    storage.outbox.listDue = async (dueNow: number) => {
+      const due = await originalListDue(dueNow);
+      await storage.outbox.discard("id-1");
+      return due;
+    };
+
+    await service.drain();
+
+    expect(api.postMessageCalls).toEqual([]);
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+  });
+
   it("stops draining on an invalid token and calls onInvalidToken once", async () => {
     api.failWith("postMessage", new InvalidTokenError());
     const service = createService();
@@ -231,6 +262,22 @@ describe("OutboxService", () => {
     expect(row?.status).toBe("sending");
     expect(rowChanged).toEqual([]);
     expect(sentChats).toEqual([]);
+  });
+
+  it("stays sending and does not post when alive becomes false directly before postMessage", async () => {
+    const service = createService();
+    await service.enqueue(1, "hello");
+    const originalMarkSending = storage.outbox.markSending.bind(storage.outbox);
+    storage.outbox.markSending = async (clientMessageId: string) => {
+      const transitioned = await originalMarkSending(clientMessageId);
+      current = false;
+      return transitioned;
+    };
+
+    await service.drain();
+
+    expect(api.postMessageCalls).toEqual([]);
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
   });
 
   it("calls resetStuckSending on init()", async () => {

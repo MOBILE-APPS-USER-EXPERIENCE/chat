@@ -41,6 +41,16 @@ export function outboxRepositoryContract(
             ownerUserid: "owner",
             members: [],
           },
+          {
+            id: 3,
+            name: "Chat 3",
+            visibility: "private",
+            directchat: false,
+            role: "member",
+            joined: true,
+            ownerUserid: "owner",
+            members: [],
+          },
         ],
         1000,
       );
@@ -112,9 +122,10 @@ export function outboxRepositoryContract(
       await storage.outbox.enqueue(input(2, "future"), "cid-future", 1000);
       await storage.outbox.markFailed("cid-future", "offline", 2000);
       await storage.outbox.enqueue(input(1, "due"), "cid-due", 900);
+      await storage.outbox.enqueue(input(3, "untouched"), "cid-untouched", 900);
 
-      expect(await storage.outbox.listBlockedChatIds(1500)).toEqual(
-        expect.arrayContaining([1, 2]),
+      expect(new Set(await storage.outbox.listBlockedChatIds(1500))).toEqual(
+        new Set([1, 2]),
       );
     });
 
@@ -146,19 +157,20 @@ export function outboxRepositoryContract(
       ]);
     });
 
-    it("markSending transitions pending to sending, and is a no-op for non-pending or unknown rows", async () => {
+    it("markSending transitions pending or failed to sending and reports the transition", async () => {
       await storage.outbox.enqueue(input(1), "cid-1", 1000);
-      await storage.outbox.markSending("cid-1");
+      expect(await storage.outbox.markSending("cid-1")).toBe(true);
       expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
 
-      await expect(
-        storage.outbox.markSending("cid-1"),
-      ).resolves.toBeUndefined();
+      await expect(storage.outbox.markSending("cid-1")).resolves.toBe(false);
       expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
 
-      await expect(
-        storage.outbox.markSending("unknown-id"),
-      ).resolves.toBeUndefined();
+      await storage.outbox.enqueue(input(1), "cid-failed", 1000);
+      await storage.outbox.markFailed("cid-failed", "offline", 2000);
+      expect(await storage.outbox.markSending("cid-failed")).toBe(true);
+      expect((await storage.outbox.listByChat(1))[1]?.status).toBe("sending");
+
+      await expect(storage.outbox.markSending("unknown-id")).resolves.toBe(false);
     });
 
     it("markFailed sets status, increments attempts, sets lastError/nextRetryAt, and is a no-op for unknown rows", async () => {

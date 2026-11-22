@@ -104,7 +104,7 @@ Prinzip: Aktionen sollen verständliches Feedback erhalten.
 Wo: Anmeldung, Registrierung, Chatbeitritt, Laden und Versand.
 
 Umsetzung: Ladezustände nennen die laufende Aktion, etwa „Wird angemeldet …“
-oder „Nachrichten werden geladen …“. Während des Versands erscheint
+oder „Nachrichten werden geladen …“. Während des Versands erscheint ein Icon mit dem Label
 „Nachricht wird gesendet …“, nach einer erfolgreichen Serverantwort
 „Nachricht gesendet.“. Der Kontobereich zeigt „Angemeldet“, Name, Kennung und
 Token. Statusmeldungen und Suchtreffer sind als Live-Regionen ausgezeichnet.
@@ -362,7 +362,3 @@ https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html
 
 [10] W3C WAI: Status Messages, 4.1.3
 https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html
-
-
-
-

@@ -7,6 +7,7 @@ import type { ForegroundSignal } from "./foregroundSignal";
 import { StorageEvents } from "./storageEvents";
 import { SyncScheduler, type SessionLike } from "./syncScheduler";
 import { SyncService } from "../syncService";
+import { OutboxService } from "../outboxService";
 
 type SessionState = ReturnType<SessionLike["getState"]>;
 
@@ -575,21 +576,83 @@ describe("SyncScheduler", () => {
     scheduler.stop();
   });
 
-  test("runTickAndReschedule survives an unexpected tick throw and keeps scheduling", async () => {
-    jest.useFakeTimers();
-    const { session, scheduler, api } = setup(5000);
-    jest
-      .spyOn(SyncService.prototype, "runCycle")
-      .mockRejectedValue(new Error("unexpected tick failure"));
+  test.each(["invalid_token", "offline", "aborted"] as const)(
+    "does not drain the outbox after a %s cycle result",
+    async (status) => {
+      const { session, scheduler } = setup();
+      jest.spyOn(SyncService.prototype, "runCycle").mockResolvedValue(
+        { status } as never,
+      );
+      const drainSpy = jest.spyOn(OutboxService.prototype, "drain");
+
+      session.setState({ status: "signed_in", account: { id: "acc1" } });
+      scheduler.start();
+      await flush(80);
+
+      expect(drainSpy).not.toHaveBeenCalled();
+      scheduler.stop();
+    },
+  );
+
+  test("a stale drain of a previous account does not post or block the new account", async () => {
+    const { session, scheduler, factory, api, openCalls } = setup(60_000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
 
     session.setState({ status: "signed_in", account: { id: "acc1" } });
     scheduler.start();
+    await flush(80);
+
+    const release = api.holdPost();
+    await scheduler.enqueueMessage(1, "wrong-account");
     await flush();
+    session.setState({ status: "signed_in", account: { id: "acc2" } });
+    await flush();
+    release();
+    await flush(80);
+
+    expect(openCalls).toEqual(["acc1", "acc2"]);
+    expect(api.postMessageCalls).toEqual([
+      { chatId: 1, text: "wrong-account", important: false },
+    ]);
+    scheduler.stop();
+  });
+
+  test("survives an unexpected tick throw, runs runCycle twice, and still drains an outbox row", async () => {
+    jest.useFakeTimers();
+    const { session, scheduler, factory, api } = setup(5000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+    const runCycleSpy = jest.spyOn(SyncService.prototype, "runCycle");
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+    await storage.outbox.enqueue(
+      {
+        chatId: 1,
+        text: "after-first-cycle",
+        important: false,
+        photoUri: null,
+        fileUri: null,
+        position: null,
+      },
+      "cid-after-first-cycle",
+      Date.now(),
+    );
+    runCycleSpy.mockRejectedValueOnce(new Error("unexpected tick failure"));
 
     await jest.advanceTimersByTimeAsync(5000);
-    await flush();
+    await flush(80);
 
-    expect(api.callsOf("getChats")).toHaveLength(0);
+    expect(runCycleSpy).toHaveBeenCalledTimes(2);
+    expect(api.postMessageCalls).toEqual([
+      { chatId: 1, text: "after-first-cycle", important: false },
+    ]);
     expect(scheduler.getStatus().status).not.toBe("storage_error");
     scheduler.stop();
   });
