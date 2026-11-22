@@ -1,6 +1,6 @@
 # ADR-003: Secret storage on web
 
-- Status: Proposed
+- Status: Accepted
 - Related: ADR-001 (AsyncStorage is not secure storage), `src/storage/secret/webSecretStore.ts`
 
 ## Context

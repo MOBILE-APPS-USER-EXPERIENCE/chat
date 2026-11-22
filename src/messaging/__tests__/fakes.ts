@@ -45,6 +45,7 @@ export class FakeSyncApi implements SyncApi {
   onCall: ((call: ApiCall) => void) | null = null;
   private readonly failures: Failure[] = [];
   private gate: Promise<void> | null = null;
+  private postGate: Promise<void> | null = null;
 
   /** Makes matching requests fail until the end of the test. */
   failWith(
@@ -63,6 +64,18 @@ export class FakeSyncApi implements SyncApi {
     });
     return () => {
       this.gate = null;
+      open();
+    };
+  }
+
+  /** Holds postMessage calls until the returned function is called. */
+  holdPost(): () => void {
+    let open!: () => void;
+    this.postGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return () => {
+      this.postGate = null;
       open();
     };
   }
@@ -106,6 +119,8 @@ export class FakeSyncApi implements SyncApi {
     important: boolean,
   ): Promise<void> {
     await this.enter({ method: "postMessage", chatId });
+    const gate = this.postGate;
+    if (gate !== null) await gate;
     this.postMessageCalls.push({ chatId, text, important });
   }
 

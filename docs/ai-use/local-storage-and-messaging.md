@@ -43,6 +43,8 @@ iterated on with human feedback; it was not accepted automatically.
   database is not encrypted.
 - The server does not return a message ID when sending or support a client
   idempotency key. Retrying an uncertain send can therefore create duplicates.
+- The outbox sends rows per chat in enqueue order, blocking later rows in that
+  chat until earlier rows succeed or become retryable; duplicate risk is unchanged.
 - Public-chat browsing and joining is a separate planned feature that can later
   be reused for laboratory groups; it does not itself implement their
   course-to-subgroup relationship.

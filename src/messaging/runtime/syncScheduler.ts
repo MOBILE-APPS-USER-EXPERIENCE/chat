@@ -75,6 +75,7 @@ export class SyncScheduler {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
   private outboxInFlight = false;
+  private outboxDirty = false;
   private sessionUnsub: (() => void) | null = null;
   private foregroundUnsub: (() => void) | null = null;
   private statusSnapshot: SyncRuntimeStatus = {
@@ -187,7 +188,13 @@ export class SyncScheduler {
    */
   flushOutbox(chatId?: number): void {
     void chatId;
+    this.outboxDirty = true;
     void this.runOutboxDrain(this.generation);
+  }
+
+  async discardOutboxMessage(clientMessageId: string): Promise<boolean> {
+    if (this.outboxService === null) return false;
+    return this.outboxService.discard(clientMessageId);
   }
 
   // ---- session / foreground transitions --------------------------------------------------
@@ -263,6 +270,8 @@ export class SyncScheduler {
     this.inFlight = true;
     try {
       await this.tick(generation);
+    } catch {
+      // An unexpected tick error must not terminate the timer loop; it is retried on the next tick.
     } finally {
       this.inFlight = false;
     }
@@ -295,14 +304,22 @@ export class SyncScheduler {
   private async runOutboxDrain(generation: number): Promise<void> {
     if (this.stopped || generation !== this.generation) return;
     if (this.outboxService === null) return;
-    if (this.outboxInFlight) return; // a drain is already running; this call is redundant
+    if (this.outboxInFlight) {
+      this.outboxDirty = true;
+      return;
+    }
     this.outboxInFlight = true;
     try {
-      await this.outboxService.drain();
-    } catch {
-      // `drain()` writes ordinary send failures as 'failed' rows and never throws for them;
-      // only a genuinely unexpected storage error reaches here. Swallow it so a broken outbox
-      // never blocks chat polling — the next tick or flushOutbox() call retries.
+      do {
+        this.outboxDirty = false;
+        try {
+          await this.outboxService.drain();
+        } catch {
+          // `drain()` writes ordinary send failures as 'failed' rows and never throws for them;
+          // only a genuinely unexpected storage error reaches here. Swallow it so a broken outbox
+          // never blocks chat polling — the next tick or flushOutbox() call retries.
+        }
+      } while (this.outboxDirty);
     } finally {
       this.outboxInFlight = false;
     }
@@ -342,14 +359,19 @@ export class SyncScheduler {
         isNetworkError: this.deps.isNetworkError,
         onInvalidToken: this.deps.onInvalidToken,
         newId: this.deps.newId,
-        onRowChanged: (chatId) => this.deps.events.emitOutbox(chatId),
+        onRowChanged: (chatId, reason) => {
+          if (reason !== "sent") this.deps.events.emitOutbox(chatId);
+        },
         // Shrinks the gap between the optimistic row disappearing and the real message showing
         // up: instead of waiting for the next ~5s cycle, poll this one chat right away. Reuses
         // `pollNow`, which already serializes with cycle polls of the same chat and only emits
         // `emitMessages` when something was actually inserted. Fire-and-forget: a slow or
         // failing poll must not delay draining the next outbox row.
         onSent: (chatId) => {
-          void this.pollNow(chatId);
+          void (async () => {
+            await this.pollNow(chatId);
+            this.deps.events.emitOutbox(chatId);
+          })();
         },
       };
       const outboxService = new OutboxService(outboxDeps);

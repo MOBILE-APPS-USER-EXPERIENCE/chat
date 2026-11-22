@@ -255,13 +255,13 @@ SDK 58 (see Risks).
 | 3   | Web (Chrome)                                                | Two tabs: Write in one, Read in the other; note errors or locks                                                     | ✔      |
 | 4   | Web (Chrome)                                                | Delete DB, reload, Open + migrate: DB is empty again                                                                | ✔      |
 | 5   | Web (Chrome)                                                | Cascade test works                                                                                                  | ✔      |
-| 6   | Web (Chrome)                                                | Normal login against a chat server still works with COOP/COEP active                                                |        |
+| 6   | Web (Chrome)                                                | Normal login against a chat server still works with COOP/COEP active                                                | ✔      |
 | 1   | Web (Firefox)                                               | Spike: Open + migrate succeeds; driver and capabilities shown                                                       | ✔      |
 | 2   | Web (Firefox)                                               | Write, reload, Read: data still there                                                                               | ✔      |
 | 3   | Web (Firefox)                                               | Two tabs: Write in one, Read in the other; note errors or locks                                                     | ✔      |
 | 4   | Web (Firefox)                                               | Delete DB, reload, Open + migrate: DB is empty again                                                                | ✔      |
 | 5   | Web (Firefox)                                               | Cascade test works                                                                                                  | ✔      |
-| 6   | Web (Firefox)                                               | Normal login against a chat server still works with COOP/COEP active                                                |        |
+| 6   | Web (Firefox)                                               | Normal login against a chat server still works with COOP/COEP active                                                | ✔      |
 | 1   | Web (static export + proposed headers)                      | Spike: Open + migrate succeeds; driver and capabilities shown                                                       |        |
 | 2   | Web (static export + proposed headers)                      | Write, reload, Read: data still there                                                                               |        |
 | 3   | Web (static export + proposed headers)                      | Two tabs: Write in one, Read in the other; note errors or locks                                                     |        |

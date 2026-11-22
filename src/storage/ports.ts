@@ -132,6 +132,8 @@ export interface OutboxRepository {
   listByChat(chatId: number): Promise<OutboxRow[]>;
   /** Lists rows due to be sent now (pending, or failed with nextRetryAt <= now), oldest first, across all chats. */
   listDue(now: number): Promise<OutboxRow[]>;
+  /** Lists chat ids that have a sending row or a failed row with nextRetryAt in the future. */
+  listBlockedChatIds(now: number): Promise<number[]>;
   /** Creates a pending row. Throws if the chat does not exist; changes nothing on failure. */
   enqueue(
     input: OutboxInput,
@@ -148,6 +150,8 @@ export interface OutboxRepository {
   ): Promise<void>;
   /** Deletes a row (used after a successful send). Unknown id: no-op. */
   remove(clientMessageId: string): Promise<void>;
+  /** Removes a row only when it is not currently sending; returns the removed row, or null. */
+  discard(clientMessageId: string): Promise<OutboxRow | null>;
   /** Resets every 'sending' row back to 'pending' (recovers from a crash mid-send). */
   resetStuckSending(): Promise<void>;
 }

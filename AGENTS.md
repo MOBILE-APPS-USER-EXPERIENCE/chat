@@ -129,7 +129,7 @@ sub-groups, write-protected (broadcast) chats, or push. Backlog items for these 
 - Never present such a feature as secure or enforced in code, comments or UI text.
 - The **envelope format** (structured events inside `text`) is **not defined yet**.
   Do not invent one. It needs an ADR with the next free ADR number in `docs/adr/`
-  (adr-003 and adr-004 are taken) written by the team first.
+  written by the team first.
 - Reference the issue number in your summary and commit message.
 - Real push notifications are not possible with this API. Do not add push libraries.
 

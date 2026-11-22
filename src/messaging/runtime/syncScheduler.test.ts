@@ -6,6 +6,7 @@ import { InvalidTokenError } from "../errors";
 import type { ForegroundSignal } from "./foregroundSignal";
 import { StorageEvents } from "./storageEvents";
 import { SyncScheduler, type SessionLike } from "./syncScheduler";
+import { SyncService } from "../syncService";
 
 type SessionState = ReturnType<SessionLike["getState"]>;
 
@@ -121,6 +122,7 @@ function setup(intervalMs = 5000) {
 describe("SyncScheduler", () => {
   afterEach(() => {
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   test("opens storage and starts cycling on sign-in", async () => {
@@ -383,7 +385,7 @@ describe("SyncScheduler", () => {
 
     session.setState({ status: "signed_in", account: { id: "acc1" } });
     scheduler.start();
-    await flush(80);
+    await flush(200);
 
     expect(api.postMessageCalls).toEqual([
       { chatId: 1, text: "hi", important: false },
@@ -481,6 +483,114 @@ describe("SyncScheduler", () => {
     expect(api.callsOf("getMessages").length).toBeGreaterThan(callsBeforeSend);
     expect(await storage.messages.get(1, 1)).not.toBeNull();
     expect(messageListener).toHaveBeenCalled();
+    scheduler.stop();
+  });
+
+  test("flushOutbox while a drain is held runs a second drain after the held post finishes", async () => {
+    const { session, scheduler, factory, api } = setup(60_000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    const release = api.holdPost();
+    await scheduler.enqueueMessage(1, "first");
+    await flush();
+    await scheduler.enqueueMessage(1, "second");
+    scheduler.flushOutbox();
+    release();
+    await flush(80);
+
+    expect(api.postMessageCalls.map((call) => call.text)).toEqual([
+      "first",
+      "second",
+    ]);
+    scheduler.stop();
+  });
+
+  test("discardOutboxMessage removes a failed row and emits the outbox event", async () => {
+    const { session, scheduler, factory, api, events } = setup();
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    await storage.outbox.enqueue(
+      {
+        chatId: 1,
+        text: "discard me",
+        important: false,
+        photoUri: null,
+        fileUri: null,
+        position: null,
+      },
+      "cid-discard",
+      Date.now(),
+    );
+    await storage.outbox.markFailed("cid-discard", "offline", Date.now() + 60_000);
+
+    const listener = jest.fn();
+    events.subscribeOutbox(1, listener);
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(200);
+    await storage.outbox.markFailed(
+      "cid-discard",
+      "offline",
+      Date.now() + 60_000,
+    );
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("failed");
+
+    expect(await scheduler.discardOutboxMessage("cid-discard")).toBe(true);
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+    expect(listener).toHaveBeenCalled();
+    scheduler.stop();
+  });
+
+  test("a successful send emits outbox only after the immediate chat poll settles", async () => {
+    const { session, scheduler, factory, api, events } = setup(60_000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+
+    const listener = jest.fn();
+    events.subscribeOutbox(1, listener);
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    const release = api.holdMessages();
+    await scheduler.enqueueMessage(1, "hello");
+    await flush();
+    listener.mockClear();
+
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+    expect(listener).not.toHaveBeenCalled();
+    release();
+    await flush(80);
+    expect(listener).toHaveBeenCalled();
+    scheduler.stop();
+  });
+
+  test("runTickAndReschedule survives an unexpected tick throw and keeps scheduling", async () => {
+    jest.useFakeTimers();
+    const { session, scheduler, api } = setup(5000);
+    jest
+      .spyOn(SyncService.prototype, "runCycle")
+      .mockRejectedValue(new Error("unexpected tick failure"));
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush();
+
+    await jest.advanceTimersByTimeAsync(5000);
+    await flush();
+
+    expect(api.callsOf("getChats")).toHaveLength(0);
+    expect(scheduler.getStatus().status).not.toBe("storage_error");
     scheduler.stop();
   });
 });

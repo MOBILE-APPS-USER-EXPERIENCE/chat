@@ -3,6 +3,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Platform } from "react-native";
 import { Button, Spinner, Text, TextArea, XStack, YStack } from "tamagui";
 
+import ConfirmDialog from "@/components/confirm-dialog";
 import Header from "@/components/header";
 import {
   Check,
@@ -28,7 +29,7 @@ function getAuthorId(entry: ListEntry | undefined, currentUserId: string) {
 
 function getTimestamp(entry: ListEntry | undefined): number | undefined {
   if (!entry) return undefined;
-  return entry.kind === "message" ? entry.message.receivedAt : Date.now();
+  return entry.kind === "message" ? entry.message.receivedAt : entry.row.createdAt;
 }
 
 function Bubble({
@@ -122,7 +123,13 @@ function PendingRow({
   row,
   isGroupStart,
   isNewest,
-}: Readonly<{ row: OutboxRow; isGroupStart: boolean; isNewest: boolean }>) {
+  onDiscard,
+}: Readonly<{
+  row: OutboxRow;
+  isGroupStart: boolean;
+  isNewest: boolean;
+  onDiscard: (row: OutboxRow) => void;
+}>) {
   return (
     <Bubble
       isOwn
@@ -152,14 +159,26 @@ function PendingRow({
         </Text>
 
         {row.status === "sending" && (
-          <CloudUpload color="textSecondary" size={12} />
+          <CloudUpload color="textSecondary" size={12} aria-label="Wird gerade gesendet" />
         )}
         {row.status === "failed" && row.lastError !== "offline" ? (
-          <OctagonX color="textSecondary" size={12} />
+          <OctagonX color="textSecondary" size={12} aria-label="Senden fehlgeschlagen" />
         ) : (
-          <ClockFading color="textSecondary" size={12} />
+          <ClockFading color="textSecondary" size={12} aria-label="Wird gesendet" />
         )}
       </XStack>
+      {row.status === "failed" && (
+        <Button
+          py={Spacing.one}
+          px={Spacing.two}
+          self="flex-end"
+          backgroundColor="error"
+          color="errorText"
+          onPress={() => onDiscard(row)}
+        >
+          Verwerfen
+        </Button>
+      )}
     </Bubble>
   );
 }
@@ -173,10 +192,11 @@ export default function ChatScreen() {
   const chatId = Number(chatIdParam);
   const { chat } = useChat(chatId);
   const { messages, loading, loadOlder } = useMessages(chatId);
-  const { pending, sending, send } = useOutbox(chatId);
+  const { pending, sending, send, discard } = useOutbox(chatId);
   const [text, setText] = useState("");
   const [error, setError] = useState<string>();
   const [inputHeight, setInputHeight] = useState(44);
+  const [discardRow, setDiscardRow] = useState<OutboxRow | null>(null);
   const session = useSession();
 
   const currentUserId =
@@ -220,6 +240,7 @@ export default function ChatScreen() {
             row={item.row}
             isGroupStart={isGroupStart}
             isNewest={isNewest}
+            onDiscard={setDiscardRow}
           />
         );
 
@@ -248,6 +269,22 @@ export default function ChatScreen() {
         caughtError instanceof Error
           ? caughtError.message
           : "Senden fehlgeschlagen.",
+      );
+    }
+  }
+
+  async function handleDiscard() {
+    if (discardRow === null) return;
+    const clientMessageId = discardRow.clientMessageId;
+    setDiscardRow(null);
+    setError(undefined);
+    try {
+      await discard(clientMessageId);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Nachricht konnte nicht verworfen werden.",
       );
     }
   }
@@ -332,6 +369,15 @@ export default function ChatScreen() {
           {!!error && <Text color="error">{error}</Text>}
         </YStack>
       </KeyboardAvoidingView>
+      <ConfirmDialog
+        visible={discardRow !== null}
+        title="Nachricht verwerfen"
+        message="Diese Nachricht wird aus der Warteschlange entfernt."
+        confirmLabel="Verwerfen"
+        destructive
+        onConfirm={() => void handleDiscard()}
+        onCancel={() => setDiscardRow(null)}
+      />
     </YStack>
   );
 }
