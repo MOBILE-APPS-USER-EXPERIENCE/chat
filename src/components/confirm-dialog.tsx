@@ -1,6 +1,8 @@
 import { Adapt, Button, Dialog, Sheet, Text, XStack, YStack } from 'tamagui';
 
+import { Spacing } from '@/config/layout';
 import { triggerPrimaryButtonHaptic } from '@/utils/primary-button-haptic';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function ConfirmDialog({
     visible,
@@ -21,6 +23,7 @@ function ConfirmDialog({
     onConfirm: () => void;
     onCancel: () => void;
 }>) {
+    const insets = useSafeAreaInsets();
     return (
         <Dialog open={visible} onOpenChange={(open) => !open && onCancel()} modal>
             <Dialog.Portal>
@@ -51,7 +54,7 @@ function ConfirmDialog({
             <Adapt when="max-md" platform="touch">
                 <Sheet modal dismissOnSnapToBottom snapPointsMode="fit">
                     <Sheet.Overlay backgroundColor="rgba(0, 0, 0, 0.5)" />
-                    <Sheet.Container>
+                    <Sheet.Container pb={insets.bottom + Spacing.four} px={Spacing.four} pt={Spacing.four}>
                         <Sheet.Background backgroundColor="background" />
                         <Sheet.ScrollView>
                             <Adapt.Contents />
@@ -92,11 +95,11 @@ function DialogContent({
             </YStack>
 
             <XStack justify="flex-end" gap={8} mt={8}>
-                <Dialog.Close asChild>
+                <Dialog.Close asChild displayWhenAdapted>
                     <Button onPress={onCancel}>{cancelLabel}</Button>
                 </Dialog.Close>
                 {destructive ? (
-                    <Dialog.Close asChild>
+                    <Dialog.Close asChild displayWhenAdapted>
                         <Button
                             backgroundColor="error"
                             color="errorText"
@@ -108,7 +111,7 @@ function DialogContent({
                         </Button>
                     </Dialog.Close>
                 ) : (
-                    <Dialog.Close asChild>
+                    <Dialog.Close asChild displayWhenAdapted>
                         <Button onPress={onConfirm}>{confirmLabel}</Button>
                     </Dialog.Close>
                 )}

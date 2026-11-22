@@ -12,7 +12,7 @@ import {
   OctagonX,
   SendHorizontal,
 } from "@/components/icons";
-import { Spacing } from "@/constants/layout";
+import { Spacing } from "@/config/layout";
 import { useChat } from "@/hooks/use-chat";
 import { useMessages } from "@/hooks/use-messages";
 import { useOutbox } from "@/hooks/use-outbox";

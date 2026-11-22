@@ -1,0 +1,27 @@
+export const Spacing = {
+  one: 4,
+  two: 8,
+  three: 16,
+  four: 24,
+  five: 32,
+  six: 40,
+  seven: 48,
+  eight: 56,
+  nine: 64,
+  ten: 72,
+  eleven: 80,
+  twelve: 88,
+  thirteen: 96,
+} as const;
+
+export const FontSize = {
+  one: 12,
+  two: 14,
+  three: 16,
+  four: 18,
+  five: 20,
+  six: 24,
+  seven: 28,
+  eight: 32,
+  nine: 36,
+} as const;

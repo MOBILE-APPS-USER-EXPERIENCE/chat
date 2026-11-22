@@ -1,4 +1,4 @@
-import { Spacing } from "@/constants/layout";
+import { Spacing } from "@/config/layout";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Text, XStack, YStack } from "tamagui";

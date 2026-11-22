@@ -1,4 +1,4 @@
-import { Spacing } from "@/constants/layout";
+import { Spacing } from "@/config/layout";
 import { Text, View } from "tamagui";
 
 export type AvatarProps = Readonly<{

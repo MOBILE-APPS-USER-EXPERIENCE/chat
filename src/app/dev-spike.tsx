@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { useState } from 'react';
 import { Button, H2, ScrollView, Text, XStack, YStack } from 'tamagui';
 
-import { Spacing } from '@/constants/layout';
+import { Spacing } from '@/config/layout';
 import { accountStorage, getStorageStatus } from '@/storage/accountStorage';
 import { deleteAccountDatabase, openAccountDatabase } from '@/storage/db/openDatabase';
 import { chats, rawMessages } from '@/storage/db/schema';

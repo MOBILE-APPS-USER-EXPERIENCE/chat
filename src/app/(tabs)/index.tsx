@@ -4,8 +4,8 @@ import { Button, Spinner, Text, XStack, YStack } from "tamagui";
 
 import Avatar from "@/components/avatar";
 import Header from "@/components/header";
-import { config } from "@/constants/config";
-import { Spacing } from "@/constants/layout";
+import { config } from "@/config/config";
+import { Spacing } from "@/config/layout";
 import { useChats } from "@/hooks/use-chats";
 import type { ChatRow } from "@/storage/types";
 import { formatDateRelative } from "@/utils/format-date-times";
@@ -87,7 +87,7 @@ export default function Index() {
     <YStack flex={1} backgroundColor="background" pb={Spacing.four}>
       <Header title={config.appName} showBackButton={false} />
 
-      <YStack flex={1} gap={Spacing.two} px={Spacing.four} pt={Spacing.two}>
+      <YStack flex={1} gap={Spacing.two} pt={Spacing.two}>
         <ChatListBody loading={loading} chats={chats} />
       </YStack>
     </YStack>

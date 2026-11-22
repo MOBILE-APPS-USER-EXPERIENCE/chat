@@ -3,11 +3,13 @@ import { AuthScreen } from "@/components/auth/auth-screen";
 import { ServerField } from "@/components/auth/server-field";
 import { useAuthSubmit } from "@/hooks/use-auth-submit";
 import { session } from "@/session";
-import { useState } from "react";
+import type { TamaguiElement } from "@tamagui/web";
+import { useRef, useState } from "react";
 
 export default function LoginScreen() {
   const [userid, setUserid] = useState("");
   const [password, setPassword] = useState("");
+  const passwordRef = useRef<TamaguiElement>(null);
   const { error, isSubmitting, submit } = useAuthSubmit(
     "Login fehlgeschlagen.",
   );
@@ -43,9 +45,13 @@ export default function LoginScreen() {
         disabled={isSubmitting}
         onChangeText={setUserid}
         placeholder="z. B. abcdit01"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => passwordRef.current?.focus()}
         value={userid}
       />
       <AuthField
+        ref={passwordRef}
         id="login-password"
         label="Passwort"
         autoCapitalize="none"

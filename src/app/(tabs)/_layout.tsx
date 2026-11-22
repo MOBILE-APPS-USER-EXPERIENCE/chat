@@ -1,3 +1,4 @@
+import { Spacing } from "@/config/layout";
 import { Tabs } from "expo-router";
 import { useTheme } from "tamagui";
 import { MessagesCircle, User } from "../../components/icons";
@@ -14,8 +15,12 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: theme.background.val,
           borderColor: theme.textSecondary.val,
-          minHeight: 72,
-          paddingTop: 8,
+          minHeight: Spacing.ten,
+          paddingTop: Spacing.two,
+        },
+        sceneStyle: {
+          paddingHorizontal: Spacing.two,
+          backgroundColor: theme.background.val,
         },
       }}
     >

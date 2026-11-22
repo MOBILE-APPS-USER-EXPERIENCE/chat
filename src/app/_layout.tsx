@@ -1,4 +1,3 @@
-// src/app/_layout.tsx
 import {
   DarkTheme,
   DefaultTheme,
@@ -6,9 +5,10 @@ import {
   Stack,
   ThemeProvider,
 } from "expo-router";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TamaguiProvider, Text, YStack } from "tamagui";
 
-import { Spacing } from "@/constants/layout";
+import { Spacing } from "@/config/layout";
 import "@/global.css";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { syncRuntime } from "@/messaging/runtime";
@@ -44,37 +44,39 @@ export default function RootLayout() {
   const signedIn = state.status === "signed_in";
 
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme={theme}>
-      <ThemeProvider value={theme === "dark" ? DarkTheme : DefaultTheme}>
-        {initFailed ? (
-          <YStack
-            flex={1}
-            items="center"
-            justify="center"
-            px={Spacing.four}
-            backgroundColor="background"
-          >
-            <Text color="error">
-              Lokale Daten konnten nicht geladen werden. Bitte starte die App
-              neu.
-            </Text>
-          </YStack>
-        ) : (
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Protected guard={signedIn}>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="chat/[chatId]"
-                options={{ headerShown: false }}
-              />
-            </Stack.Protected>
-            <Stack.Protected guard={!signedIn}>
-              <Stack.Screen name="(auth)/login" />
-              <Stack.Screen name="(auth)/register" />
-            </Stack.Protected>
-          </Stack>
-        )}
-      </ThemeProvider>
-    </TamaguiProvider>
+    <SafeAreaProvider>
+      <TamaguiProvider config={tamaguiConfig} defaultTheme={theme}>
+        <ThemeProvider value={theme === "dark" ? DarkTheme : DefaultTheme}>
+          {initFailed ? (
+            <YStack
+              flex={1}
+              items="center"
+              justify="center"
+              px={Spacing.four}
+              backgroundColor="background"
+            >
+              <Text color="error">
+                Lokale Daten konnten nicht geladen werden. Bitte starte die App
+                neu.
+              </Text>
+            </YStack>
+          ) : (
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Protected guard={signedIn}>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="chat/[chatId]"
+                  options={{ headerShown: false }}
+                />
+              </Stack.Protected>
+              <Stack.Protected guard={!signedIn}>
+                <Stack.Screen name="(auth)/login" />
+                <Stack.Screen name="(auth)/register" />
+              </Stack.Protected>
+            </Stack>
+          )}
+        </ThemeProvider>
+      </TamaguiProvider>
+    </SafeAreaProvider >
   );
 }

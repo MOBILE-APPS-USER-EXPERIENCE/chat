@@ -1,6 +1,6 @@
-import { animationsCSS } from "@tamagui/config/animations-css";
 import { defaultConfig } from "@tamagui/config/v6";
 import { createFont, createTamagui, isWeb } from "tamagui";
+import { animations } from "./config/animations";
 
 const systemFont = createFont({
   ...defaultConfig.fonts.body,
@@ -46,7 +46,7 @@ const brandThemes = {
 
 export const tamaguiConfig = createTamagui({
   ...defaultConfig,
-  animations: animationsCSS,
+  animations: animations,
   fonts: {
     ...defaultConfig.fonts,
     body: systemFont,
@@ -65,5 +65,5 @@ export type Conf = typeof tamaguiConfig;
 
 declare module "tamagui" {
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Tamagui requires interface module augmentation
-  interface TamaguiCustomConfig extends Conf {}
+  interface TamaguiCustomConfig extends Conf { }
 }

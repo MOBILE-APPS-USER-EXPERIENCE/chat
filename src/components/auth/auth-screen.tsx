@@ -1,6 +1,6 @@
 // components/auth/auth-screen.tsx
-import { config } from "@/constants/config";
-import { Spacing } from "@/constants/layout";
+import { config } from "@/config/config";
+import { Spacing } from "@/config/layout";
 import { router, type Href } from "expo-router";
 import type { ReactNode } from "react";
 import { KeyboardAvoidingView } from "react-native";
