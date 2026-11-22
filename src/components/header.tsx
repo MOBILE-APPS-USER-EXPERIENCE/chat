@@ -1,13 +1,10 @@
 import { Spacing } from "@/constants/layout";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Text, View, XStack, YStack } from "tamagui";
+import { Button, Text, XStack, YStack } from "tamagui";
+import Avatar, { AvatarProps } from "./avatar";
 import { ChevronLeft } from "./icons";
 
-export type AvatarProps = Readonly<{
-  label: string;
-  placeholder: string;
-}>;
 export default function Header({
   title,
   subtitle,
@@ -54,23 +51,7 @@ export default function Header({
       )}
 
       {avatar && (
-        <View
-          aria-label={avatar.label}
-          minW={Spacing.seven}
-          h={Spacing.seven}
-          marginInline={Spacing.two}
-          marginBlock={Spacing.two}
-          items="center"
-          justify="center"
-          rounded={999}
-          borderWidth={1}
-          borderColor="accent"
-          backgroundColor="background"
-        >
-          <Text fontWeight="600" color="text">
-            {avatar.placeholder}
-          </Text>
-        </View>
+        <Avatar label={avatar.label} placeholder={avatar.placeholder} />
       )}
 
       <YStack>
