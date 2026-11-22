@@ -1,0 +1,368 @@
+UI/UX-BEGRÜNDUNG DER CHAT-APP
+Stand: 10.10.2026
+Repository: https://github.com/MOBILE-APPS-USER-EXPERIENCE/chat
+
+ZIEL UND EINORDNUNG
+
+Die App soll verständlich durch Anmeldung, Chatwahl und Nachrichtenversand führen.
+Mit „UX-Gesetzen“ sind hier Fitts, Hick und Jakob sowie Gestaltprinzipien gemeint.
+Nielsens Heuristiken ergänzen diese Orientierung; WCAG liefert überprüfbare
+Kriterien zur Barrierefreiheit. Die Prinzipien begründen Entscheidungen, beweisen
+aber nicht automatisch deren Nutzen für jede Person. Die Anwendung dieser
+Prinzipien ist keine Aussage über gesetzliche Konformität oder eine vollständige
+WCAG-Zertifizierung.
+
+Die folgenden Fundstellen sind relativ zum Repository angegeben. In diesem
+Workspace liegt es unter work/chat. Die Begründungen beschreiben die tatsächlich
+umgesetzte Oberfläche; erwartete Vorteile sind keine gemessenen Nutzertestergebnisse.
+
+
+1. FITTS'S LAW: BEDIENFLÄCHEN GUT ERREICHBAR MACHEN [1]
+
+Prinzip: Die Größe und Entfernung eines Ziels beeinflussen, wie leicht es sich
+auswählen lässt.
+
+Wo: Anmelden, Registrieren, Passwort anzeigen, Filter, Aktualisieren, Abmelden,
+Zurück zur Chatliste, Suche löschen und Senden.
+
+Umsetzung: Kleine Schaltflächen wurden vergrößert. Aktualisieren und Suche
+löschen sind 44 x 44 groß. Formularaktionen sind mindestens 48 hoch. Der
+Senden-Knopf ist mindestens 88 x 48 groß und steht direkt neben dem Textfeld.
+Die gesamte Chatzeile lässt sich auswählen. Zwischen Bedienelementen gibt es
+Abstände; man muss keine kleinen Buchstaben oder Punkte treffen.
+
+Warum: Das unterstützt die Bedienung mit dem Finger und erleichtert das Zielen.
+Die Nähe zwischen Nachrichteneingabe und Senden verkürzt den notwendigen Weg.
+
+Code: src/features/chat/ui.tsx: Button, Field und ErrorBanner;
+src/features/chat/auth-screen.tsx: tab und passwordToggle;
+src/features/chat/chat-workspace.tsx: iconButton, clearSearch, filter, back,
+logout, chatRow und sendButton.
+
+
+2. HICK'S LAW: ENTSCHEIDUNGEN ÜBERSCHAUBAR HALTEN [2]
+
+Prinzip: Mehr und komplexere Wahlmöglichkeiten können Entscheidungen erschweren.
+
+Wo: Kontozugang, Chatfilter und mobile Ansicht.
+
+Umsetzung: Es gibt zwei klar benannte Zugänge: Anmelden und Registrieren.
+Anzeigename und vollständiger Name erscheinen nur bei der Registrierung.
+Die Chatliste hat zwei Filter: Alle Chats und Meine Chats. Auf kleinen
+Bildschirmen steht jeweils die Liste oder das Gespräch im Vordergrund.
+Der große dekorative Begrüßungsbereich entfällt auf dem Handy.
+
+Warum: Nutzende sehen die Optionen, die zur aktuellen Aufgabe passen. Die
+kleine Ansicht bietet mehr Raum für das Formular und den eigentlichen Chat.
+
+Code: src/features/chat/auth-screen.tsx: mode und wide;
+src/features/chat/chat-workspace.tsx: filter und wide.
+
+
+3. JAKOB'S LAW: VERTRAUTE CHAT-MUSTER BEIBEHALTEN [3]
+
+Prinzip: Erfahrungen mit anderen Produkten prägen die Erwartungen an eine App.
+
+Wo: Chatliste, Gespräch, Nachrichtenblasen und Eingabe am unteren Rand.
+
+Umsetzung: Die bekannte Struktur bleibt erhalten: links die Gespräche, rechts
+der geöffnete Chat. Eigene Beiträge stehen rechts, andere links. Auf dem Handy
+führt ein beschrifteter „Chats“-Knopf zurück. Der Senden-Knopf zeigt jetzt ein
+Wort statt nur eines Pfeils. Enter sendet, Umschalt + Enter erzeugt im Browser
+eine neue Zeile; ein Hinweis erklärt diese Tastenkombinationen.
+
+Warum: Die grundlegende Bedienung lässt sich aus vertrauten Messenger-Mustern
+ableiten. Beschriftungen ergänzen die Symbole, wenn deren Bedeutung unklar ist.
+
+Code: src/features/chat/chat-workspace.tsx: ChatWorkspace, Conversation,
+messageRowOwn, composer und onKeyPress.
+
+
+4. GESTALT: NÄHE, ÄHNLICHKEIT UND GEMEINSAME BEREICHE [4]
+
+Prinzip: Räumlich nahe Elemente werden eher als zusammengehörig wahrgenommen.
+
+Wo: Formularfelder, Chatzeilen, Nachrichten und Kontobereich.
+
+Umsetzung: Beschriftung, Eingabe, Hilfe und Fehlermeldung eines Feldes stehen
+direkt beieinander. Eine Chatzeile bündelt Name und Vorschau. Absender, Text
+und Zeit stehen innerhalb derselben Nachrichtenblase. Kontoname, Kennung
+und Token bilden einen eigenen Bereich. Eigene Nachrichten teilen dieselbe
+Gestaltung; Tagestrenner ordnen längere Verläufe.
+
+Warum: Man erkennt leichter, welche Erklärung zu welchem Feld und welche
+Zeitangabe zu welcher Nachricht gehört. Gleiche Elemente sehen konsistent aus.
+
+Code: src/features/chat/ui.tsx: Field;
+src/features/chat/chat-workspace.tsx: ChatRow, bubble, dayRow und account.
+
+
+5. NIELSEN: SYSTEMSTATUS SICHTBAR MACHEN [5]
+
+Prinzip: Aktionen sollen verständliches Feedback erhalten.
+
+Wo: Anmeldung, Registrierung, Chatbeitritt, Laden und Versand.
+
+Umsetzung: Ladezustände nennen die laufende Aktion, etwa „Wird angemeldet …“
+oder „Nachrichten werden geladen …“. Während des Versands erscheint
+„Nachricht wird gesendet …“, nach einer erfolgreichen Serverantwort
+„Nachricht gesendet.“. Der Kontobereich zeigt „Angemeldet“, Name, Kennung und
+Token. Statusmeldungen und Suchtreffer sind als Live-Regionen ausgezeichnet.
+
+Warum: Nutzende können laufende, erfolgreiche und fehlgeschlagene Aktionen
+unterscheiden. Der Haken kennzeichnet das Speichern auf dem Server; es wird
+keine Lesebestätigung behauptet, die die API nicht liefert.
+
+Code: src/features/chat/ui.tsx: Button;
+src/features/chat/chat-workspace.tsx: sendStatus, searchStatus und Ladeanzeigen;
+src/features/chat/use-session.ts: notice und busy.
+
+
+6. NIELSEN: FEHLER VORBEUGEN UND BEHEBEN [5]
+
+Prinzip: Fehler möglichst vermeiden und die Korrektur verständlich anbieten.
+
+Wo: Anmeldung, Registrierung, Suchergebnisse und Nachrichtenversand.
+
+Umsetzung: Pflichtfelder und Regeln sind sichtbar. Die Kennung wird anhand
+des API-Formats geprüft, beim Registrieren auch Passwort und Namenslängen.
+Fehler stehen am betroffenen Feld, mit dem Wort „Fehler“ und einer Erklärung.
+Der Fokus springt bei einer abgelehnten Eingabe zum ersten fehlerhaften Feld.
+Das Passwort lässt sich prüfen und wieder verbergen. Eine erfolglose Suche
+bietet „Alle Chats anzeigen“. Bei einem Versandfehler bleibt der Entwurf
+erhalten; ein Hinweis erklärt, dass man erneut Senden wählen kann.
+
+Warum: Die Korrektur verlangt weniger Suche und erneute Eingaben. Farbe allein
+ist nicht nötig, um einen Fehler zu erkennen. Das Senden leerer Nachrichten
+und doppelte parallele Sendungen im selben Chat sind gesperrt.
+
+Code: src/features/chat/validation.ts: validateCredentials;
+src/features/chat/auth-screen.tsx: submit, focusFirst und fieldErrors;
+src/features/chat/ui.tsx: Field und ErrorBanner;
+src/features/chat/use-chats.ts: sendLocks;
+src/features/chat/chat-workspace.tsx: Entwürfe, recoveryHint und leere Suche.
+
+
+7. NIELSEN: WIEDERERKENNEN, KONTROLLE UND EFFIZIENZ [5]
+
+Prinzip: Orientierung sichtbar machen, Rückwege anbieten und häufige Aktionen
+direkt erreichbar halten.
+
+Wo: Ausgewählter Chat, Filter, Formular und mobile Navigation.
+
+Umsetzung: Der ausgewählte Chat hat einen Rand, eine Hintergrundfläche und
+die Beschriftung „Geöffnet“. Aktive Formularmodi und Filter haben einen
+Unterstrich und einen programmatisch erkennbaren Zustand. Feldbeschriftungen
+bleiben beim Tippen sichtbar. Abmelden und der mobile Rückweg sind beschriftet.
+Entwürfe bleiben beim Chatwechsel erhalten. Die gespeicherte Sitzung erspart
+erneute Anmeldung, solange der Token gültig ist.
+
+Warum: Nutzende müssen sich weniger merken und können zur Liste zurückkehren,
+ohne ihre Eingabe zu verlieren. Wichtige Zustände sind auch ohne Farbsehen
+erkennbar. Ein Rückgängigmachen bereits gesendeter Nachrichten ist damit
+nicht verbunden; dafür bietet diese Oberfläche keine Funktion.
+
+Code: src/features/chat/chat-workspace.tsx: selectedLabel, filterActive,
+drafts und onBack; src/features/chat/auth-screen.tsx: tabActive;
+src/features/chat/use-session.ts: Wiederherstellung und signOut.
+
+
+8. WCAG-ORIENTIERUNG: LESBARKEIT UND BEDIENBARKEIT [6–10]
+
+Kontrast: Für normalen Text nennt WCAG 1.4.3 mindestens 4,5:1, für großen
+Text 3:1. Die sekundäre Textfarbe wurde dunkler; besonders Zeitangaben,
+Kontoinformationen, Hilfen und Platzhalter sind besser lesbar.
+
+Berechnete Beispiele mit den tatsächlich verwendeten Farben:
+  #50665D auf #FFFFFF: 6,18:1 (sekundärer Text auf Weiß)
+  #50665D auf #DFEDD2: 5,05:1 (Zeitangaben in eigenen Nachrichten)
+  #FFFFFF auf #24765C: 5,50:1 (aktive primäre Schaltflächen)
+Die Eingaberänder #7C9186 auf #F6F8F4 erreichen 3,14:1.
+Diese Werte sind einzelne Farbpaar-Prüfungen, kein Audit der gesamten App.
+
+Textgröße: Eingaben und Nachrichtentext verwenden 16, wichtige Hilfen und
+Zeitangaben 12 bis 14. Das sind bewusste Designwerte; WCAG schreibt keine
+allgemeine Mindestschriftgröße von 16 Pixeln vor.
+
+Zielgröße: WCAG 2.5.8 nennt 24 x 24 CSS-Pixel mit Ausnahmen. Als stärkere
+eigene Vorgabe verwendet die App für ihre Schaltflächen mindestens 44 x 44,
+orientiert an 2.5.5. Das allein bedeutet keine vollständige AAA-Konformität.
+React Native verwendet auf Geräten entsprechende logische Layout-Einheiten.
+
+Tastaturfokus: Im Browser zeigt Tab einen 3 Pixel starken grünen Umriss mit
+3 Pixel Abstand. Ein Fokusrahmen wird nicht mehr bewusst ausgeblendet.
+Feldfehler sind über aria-invalid und aria-describedby mit Eingaben verbunden.
+Überschriften, Aktionsnamen und Live-Regionen ergänzen die visuelle Darstellung.
+Die Web-Seite ist als deutsch gekennzeichnet; dekorative Initialen werden
+für assistive Technik ausgeblendet. Die CSS-Regeln respektieren die Einstellung
+für reduzierte Bewegung.
+
+Code: src/features/chat/ui.tsx: palette, Field und ErrorBanner;
+src/global.css: focus-visible und prefers-reduced-motion;
+src/app/+html.tsx: lang="de";
+src/features/chat/chat-workspace.tsx: Schriftgrößen und accessibility-Eigenschaften.
+
+
+PRÜFUNG UND GRENZEN
+
+- TypeScript-Prüfung, ESLint und elf automatisierte Tests bestanden.
+- Browserabläufe mit einem separaten lokalen Testserver geprüft: Registrierung,
+  feldbezogene Fehler, Fokus auf das erste Fehlerfeld, Passwortanzeige,
+  Suchtreffer/kein Treffer, Rücksetzen der Suche und Nachrichtenversand.
+- Tastaturfokus im Browser gemessen: 3 Pixel Umriss, 3 Pixel Abstand.
+- Formularaktionen und Passwortanzeige im Browser: jeweils 48 Pixel hoch.
+- Mobile Gesprächsansicht: Zurück 64 x 44, Aktualisieren 44 x 44,
+  Senden 88 x 48 CSS-Pixel.
+- Bei 320 Pixel Breite: kein horizontales Scrollen in geprüfter Chatliste und
+  Gesprächsansicht; keine dort sichtbare Schaltfläche kleiner als 44 x 44.
+- Registrierung und Gespräch zusätzlich bei 390 Pixel Breite visuell geprüft.
+- Desktop- und Handyvorschau verwenden ausschließlich lokale Testdaten.
+
+Offen bleiben reale Nutzertests und vollständige Prüfungen mit Screenreadern,
+Browserzoom und nativen Android-/iOS-Geräten. Daher wird weder eine universell
+bessere Bedienbarkeit noch vollständige WCAG-Konformität behauptet.
+
+
+9. ERGÄNZUNG: TOKEN UND NEUER CHAT
+
+Wo: Kontobereich und Schaltfläche „Neuer Chat“ über der Suche.
+
+Umsetzung: Der Token ist standardmäßig verborgen. „Anzeigen“ macht ihn sichtbar
+und auswählbar, „Verbergen“ blendet ihn wieder aus. Im verborgenen Zustand steht
+der Token nicht als Text oder Beschriftung im Seiten-DOM.
+
+„Neuer Chat“ öffnet einen eigenen Dialog. Bei Gruppen ist ein Name mit mindestens 2 Zeichen
+Pflicht; private Zweierchats übernehmen den Namen der ausgewählten Person.
+Die Vorauswahl ist privat. Die Sichtbarkeitswahl erklärt, wer
+beitreten darf. Optional können registrierte Personen gesucht und für eine
+Einladung ausgewählt werden. Nach erfolgreicher Erstellung öffnet sich der Chat.
+Bei einer fehlgeschlagenen Einladung wird nur die verbleibende Einladung erneut
+gesendet; derselbe Chat wird nicht noch einmal angelegt.
+
+Warum: Die Tokenanzeige gibt Kontrolle über sichtbare Sitzungsdaten. Der Dialog
+bündelt eine Aufgabe (Gestalt/Nähe), erklärt die Auswahl (Wiedererkennen), zeigt
+Lade- und Fehlerzustände (Nielsen) und bietet große beschriftete Aktionen (Fitts).
+Eine private Vorauswahl verhindert versehentlich öffentlich angelegte Chats.
+
+Code: src/features/chat/chat-workspace.tsx: SessionToken und newChat;
+src/features/chat/new-chat-form.tsx: NewChatForm, submit und pending;
+src/features/chat/use-chats.ts: create.
+
+Prüfung: Token ein-/ausblenden, Name prüfen, privaten Chat mit Einladung und
+öffentlichen Chat erstellen. Ein temporärer Einladungsfehler führte nach der
+Wiederholung zu genau einem Chat und zwei Versuchen für dieselbe Einladung.
+Der Dialog wurde bei 320 Pixel Breite auf Scrollen und erreichbare Aktionen
+geprüft. Alle Browsertests dieser Ergänzung verwenden einen lokalen Testserver.
+
+10. KORREKTUR: SUCHE, CHAT-ÖFFNUNG UND AKTUALISIERUNG
+
+Die Chat-Suche erhält ihren Fokusrahmen jetzt um die gesamte Box einschließlich
+Suchsymbol und Löschaktion. Das innere Textfeld zeigt keinen zweiten Rahmen.
+Der Tastaturfokus bleibt sichtbar; die zusammengehörigen Teile wirken als Einheit.
+
+Beim Erstellen wird der eigene Chatbeitritt ausdrücklich bestätigt. Chat-IDs
+werden als Zahlen vereinheitlicht, um unterschiedliche JSON-Darstellungen
+abzufangen. Neue Chats bleiben sichtbar, wenn eine zeitgleich geladene Liste
+sie noch nicht enthält. Nach Abschluss werden Suche und Filter zurückgesetzt,
+der Chat geöffnet und der zuletzt erstellte Chat oben in der Liste angezeigt.
+So muss man ihn nicht erst unterhalb des sichtbaren Bereichs suchen.
+
+Chatliste und Nachrichten im geöffneten Gespräch werden alle fünf Sekunden
+angefragt. Laufende Listenanfragen werden nicht doppelt gestartet; Nachrichten
+werden zusammengeführt, ohne dieselben Beiträge mehrfach anzuzeigen.
+
+Code: src/global.css: #chat-search-box; chat-workspace.tsx: newestChatId;
+src/api/chatService.ts: normalizeChatId;
+src/features/chat/chat-state.ts: reconcileChats und CHAT_POLL_INTERVAL;
+src/features/chat/new-chat-form.tsx: join;
+src/features/chat/use-chats.ts: pendingChats und openCreated.
+
+Prüfung mit lokalem Testserver: private Gruppe mit Einladung erstellt, bei
+aktivem Suchfilter geöffnet, darin Nachricht gesendet; neue Nachricht und neue
+Gruppe ohne manuelle Aktualisierung angezeigt. Gemessene Abfrageabstände lagen
+bei etwa 5.000 Millisekunden. Der Testserver liefert Chat-IDs als Zeichenketten,
+behandelt Erstellen und Beitreten getrennt und lässt den neuen Chat in den ersten
+Listenantworten weg. Zusätzlich prüfen Regressionstests diese Fälle.
+
+Ergänzung zur Backend-Prüfung am 10.10.2026:
+
+Am echten Backend blieb die Chatliste zunächst trotz Neuladen veraltet.
+API-JSON-Antworten verwenden jetzt fetch mit cache: no-store. Danach wurden
+auch die zuvor erstellten privaten Chats und der private Funktionstest nach
+Neuladen vom Server angezeigt. Ein eigener Regressionstest prüft diese
+Cache-Einstellung. Code: src/api/apiClient.ts: fetchJson.
+
+11. ERGÄNZUNG: TEILNEHMER UND DIREKTE GESPRÄCHE
+
+Wo: Chatkopf, Dialog „Chatdetails“ und Formular „Neuer Chat“.
+
+Umsetzung: Der gesamte Namensbereich im Chatkopf öffnet die Chatdetails.
+Mitglieder stehen mit Anzeigename, vollständigem Namen und Kennung in einer
+Liste; das eigene Konto ist mit „Du“ markiert. Offene Einladungen stehen in
+einem eigenen Bereich und werden ausdrücklich als noch nicht beigetreten
+gekennzeichnet. Für den Hauptchat erklärt ein Hinweis, dass die API keine
+vollständige Teilnehmerliste liefert.
+
+Ein privater Chat mit genau einer ausgewählten Person wird als direktes
+Gespräch angelegt. Das Namensfeld entfällt; der Name dieser Person erscheint
+automatisch in Liste und Chatkopf. Die andere Person sieht entsprechend den
+Namen ihres Gegenübers. Gruppen und öffentliche Chats behalten einen Titel.
+
+„Name ändern“ ermöglicht später einen persönlichen Anzeigenamen; „Standardnamen
+verwenden“ stellt den automatischen Namen wieder her. Die Speicherung ist nach
+Server und Konto getrennt und bleibt nach Neuladen erhalten. Diese Änderung
+gilt nur auf diesem Gerät bzw. in diesem Browser für das eigene Konto. Eine
+Umbenennung für alle Mitglieder unterstützt die bestehende API nicht; diese
+Grenze wird direkt im Dialog erklärt.
+
+Warum: Der automatische Personenname folgt einem vertrauten Messenger-Muster
+(Jakob) und erspart bei Zweierchats eine unnötige Eingabe (Hick). Sichtbare
+Teilnehmer und Einladungszustände erleichtern die Orientierung und zeigen den
+Systemstatus (Nielsen). Die Trennung von Mitgliedern und Einladungen vermeidet
+falsche Erwartungen. Nachträgliches Ändern und Zurücksetzen gibt Kontrolle.
+
+Code: src/features/chat/chat-details.tsx; chat-title.ts; new-chat-form.tsx;
+chat-workspace.tsx; use-chats.ts; chat-name-store.ts; use-chat-names.ts.
+
+Prüfung: Mit lokalen Testdaten einen privaten Zweierchat ohne eigenen Titel
+erstellt und automatisch geöffnet; Mitglied und offene Einladung angezeigt;
+Anzeigename geändert, nach Neuladen wiedergefunden und auf Standardname
+zurückgesetzt. Bei 320 Pixel Breite kein horizontales Scrollen; sichtbare
+Schaltflächen mindestens 44 x 44. TypeScript, ESLint und elf Tests bestanden,
+darunter Namen aus beiden Teilnehmerperspektiven sowie isolierte Speicherung.
+
+QUELLEN (abgerufen am 09.10.2026; Erklärungen in eigenen Worten)
+
+[1] Jon Yablonski, Laws of UX: Fitts's Law
+https://lawsofux.com/fittss-law/
+
+[2] Jon Yablonski, Laws of UX: Hick's Law
+https://lawsofux.com/hicks-law/
+
+[3] Jon Yablonski, Laws of UX: Jakob's Law
+https://lawsofux.com/jakobs-law/
+
+[4] Jon Yablonski, Laws of UX: Law of Proximity
+https://lawsofux.com/law-of-proximity/
+
+[5] Jakob Nielsen / Nielsen Norman Group: 10 Usability Heuristics
+https://www.nngroup.com/articles/ten-usability-heuristics/
+
+[6] W3C WAI: WCAG 2.2, Contrast (Minimum), 1.4.3
+https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+
+[7] W3C WAI: Target Size (Minimum), 2.5.8
+https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+
+[8] W3C WAI: Target Size (Enhanced), 2.5.5
+https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html
+
+[9] W3C WAI: Focus Visible, 2.4.7
+https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html
+
+[10] W3C WAI: Status Messages, 4.1.3
+https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html
+
+
+
+
