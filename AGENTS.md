@@ -43,7 +43,9 @@ This file is for AI agents **and** humans. Humans own every line that lands in t
 
 ## Repo map
 
-- `src/app/` – Expo Router screens only (`(auth)/login`, `(auth)/register`, `index`, `profile`).
+- `src/app/` – Expo Router screens only (`(auth)/login`, `(auth)/register`,
+  `(tabs)/index`, `(tabs)/public`, `(tabs)/invites`, `(tabs)/profile`,
+  `chat/[chatId]`, `new-chat/*`, `invite/[chatId]`).
   `_layout.tsx` guards the routes with `Stack.Protected`.
 - `src/api/` – hand-written API client
   - `apiClient.ts`: stateless `request`, `postRequest`, `requestBinary`, `ApiError`; the active
@@ -57,11 +59,12 @@ This file is for AI agents **and** humans. Humans own every line that lands in t
   backend selected at runtime: SQLite, or memory degradation on web)
 - `src/components/` – reusable UI (e.g. `confirm-dialog.tsx`)
 - `src/config/layout.ts` – `Spacing` scale
-- `src/messaging/` – polling and outbox services
+- `src/messaging/` – polling, outbox, sync runtime and foreground scheduling
 - `src/hooks/`, `src/utils/` – hooks and helpers
 - `src/components/auth/` – authentication UI components
 - `src/tamagui.config.ts` – theme and tokens
 - `docs/adr/` – decisions; `docs/ai-use/` – documentation of AI-assisted design work
+- `docs/offline-behaviour.md` – offline reads, outbox, sync, storage and manual test matrix
 - `export_issues.md` – snapshot of the backlog. The issue tracker is the source of truth.
 
 ## Commands
@@ -147,6 +150,9 @@ sub-groups, write-protected (broadcast) chats, or push. Backlog items for these 
 ## Known deviations (do not copy these)
 
 - `confirm-dialog.tsx`: hardcoded `rgba(...)` and numeric sizes
+- `components/auth/server-field.tsx`: hardcoded `rgba(0, 0, 0, 0.5)` overlay
+- `(tabs)/_layout.tsx`: inline `tabBarStyle` and `sceneStyle` objects
+- `components/auth/auth-screen.tsx`: inline `style={{ flex: 1 }}` on `KeyboardAvoidingView`
 - `login.tsx` / `register.tsx`: `KeyboardAvoidingView` with inline `style`; placeholder `onSubmitEditing={() => undefined}`
 - `profile.tsx`: `logout()` / `deregister()` not awaited, placeholder "test" button
 

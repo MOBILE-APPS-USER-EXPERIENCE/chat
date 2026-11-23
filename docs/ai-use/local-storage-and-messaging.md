@@ -26,8 +26,18 @@ AI-assisted work included:
   independent server instances.
 - Developing message polling, local chat and message reads, and the initial
   chat screens.
-- Proposing an outbox and text composer for issue #38, including automatic
-  retry and tests. This work is still subject to integration and verification.
+- Implementing and integrating the issue-38 text outbox: enqueue,
+  pending/sending/failed states, linear backoff, stuck-send recovery, discard
+  and immediate flush. Automated outbox tests cover state transitions and
+  retry behavior; the team still owns manual offline/device verification.
+- Implementing storage fallback decisions and server URL/time handling:
+  step 8.x covers per-account SQLite, web memory fallback and cache reset;
+  step 9a covers server validation and explicit custom-server selection.
+- Implementing step 9b/9c chat actions and invitations: group/direct creation,
+  inviting, public browsing/joining and invite accept/reject; chat snapshots
+  and invitations are read from local storage, while actions remain network calls.
+- Implementing time display: server wall-clock `time` is converted to epoch
+  `sentAt` through a per-server zone map, with a local 12/24-hour clock formatter.
 
 The team also made changes independently, including UI improvements, temporary
 server selection and web hosting configuration. AI output was reviewed and

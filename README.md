@@ -1,31 +1,69 @@
 # Chat
 
-Eine Chat-App mit Expo SDK 57, React Native und TypeScript für Android, iOS und Web.
+Eine Chat-App für den HSE-PHP-Chatserver. Die App wird mit Expo SDK 58,
+React Native 0.88, TypeScript, Tamagui und expo-router für Android, iOS und Web
+entwickelt.
 
 ## Lokal starten
 
+Abhängigkeiten aus dem Lockfile installieren:
+
 ```sh
-npm ci
+npm install
+```
+
+Entwicklungsserver:
+
+```sh
+npm start
+npm run android
+npm run ios
 npm run web
 ```
 
-Für ein Mobilgerät: `npm start`, anschließend die gewünschte Expo-Entwicklungsumgebung öffnen.
+Die statische Web-Ausgabe wird über nginx mit den COOP/COEP-Headern aus
+`nginx.conf` ausgeliefert.
 
-## Funktionen
+## Serverauswahl
 
-- Anmelden und registrieren mit HSE-Kennung (z. B. `abcdit01`), Passwort und bei Registrierung Anzeigename sowie Vor- und Nachname.
-- Der zurückgegebene Token wird automatisch gespeichert und bei API-Aufrufen verwendet. Die Sitzung wird beim nächsten Start validiert. Abmelden invalidiert den Token und entfernt die lokale Sitzung.
-- Kontobereich mit Anzeigename, vollständigem Namen, Kennung und auswählbarem Sitzungs-Token. Das Passwort wird nicht gespeichert.
-- Chatliste mit Suche und Filter; auf breiten Bildschirmen steht das Gespräch rechts daneben. Auf kleinen Bildschirmen führt ein Zurück-Knopf wieder zur Liste.
-- Nachrichten mit Absender, Datum, Uhrzeit und eigener Darstellung für eigene Beiträge. Texte werden über die API gesendet; Chatliste und geöffnetes Gespräch werden automatisch alle fünf Sekunden nachgeladen.
-- Neue private oder öffentliche Chats mit optionalen Einladungen. Nach Erstellung wird der eigene Beitritt bestätigt und der Chat geöffnet; vorübergehend veraltete Listenantworten blenden ihn nicht aus.
-- Private Chats mit genau einer ausgewählten Person werden als direkte Gespräche angelegt und zeigen automatisch deren Namen in Liste und Chatkopf.
-- Der Chatkopf öffnet die Teilnehmeransicht mit Mitgliedern und offenen Einladungen. Ein eigener Anzeigename lässt sich später ändern und zurücksetzen; er wird für Konto und Server auf diesem Gerät gespeichert. Die API bietet keine gemeinsame Umbenennung.
-- Beitritt zu öffentlichen oder eingeladenen Chats. Versandfehler erhalten den Entwurf; ungültige Tokens führen zurück zur Anmeldung.
+Beim ersten Start werden der HSE-Server und ein Backup-Server in die lokale
+Serverliste aufgenommen. Auf dem Anmeldebildschirm kann ein registrierter
+Server ausgewählt werden. Über „Eigenen Server hinzufügen“ lässt sich eine
+URL eingeben; der Server wird auf Erreichbarkeit geprüft und erst nach Erfolg
+zur Liste hinzugefügt und ausgewählt. Eine automatische Failover-Auswahl gibt es
+nicht.
 
-Die App verwendet standardmäßig `https://www2.hs-esslingen.de/~chkohl/chat`. Die Spezifikation liegt in `docs/openapi.yaml`; die API-Services liegen in `src/api`. Das PHP-Backend ist nicht Teil dieses Repos. Bei Bedarf lässt sich die Standardadresse über `EXPO_PUBLIC_CHAT_API_URL` ändern (danach den Devserver neu starten). Diese Variable ist öffentlich; sie darf keine Zugangsdaten enthalten.
+Die API-Spezifikation liegt in `docs/openapi.yaml`. Das PHP-Backend ist nicht Teil
+dieses Repositories.
 
-Der Token wird mit AsyncStorage auf dem Gerät bzw. im Browser gespeichert und in der Oberfläche angezeigt. Zeitangaben folgen der Serverzeit aus der API. Foto-, Datei- und Standortbeiträge werden als solche gekennzeichnet; diese Version sendet Textnachrichten.
+## Implementierte Funktionen
+
+- Anmeldung und Registrierung.
+- Logout und Accountlöschung.
+- Chatliste mit gespeicherten Chats und Vorschauen.
+- Chatbildschirm mit gespeichertem Verlauf, Textversand und Outbox-Zuständen.
+- Erstellung öffentlicher und privater Gruppenchats sowie direkter Chats.
+- Einladen von registrierten Personen.
+- Ansicht für Einladungen mit Annehmen und Ablehnen.
+- Öffentliche Chats suchen und beitreten.
+- Offline-Lesen gespeicherter Daten, lokale Outbox und automatischer Retry:
+  [Offline-Verhalten](docs/offline-behaviour.md).
+
+Nicht implementiert sind das Bearbeiten oder Löschen gesendeter Nachrichten,
+Reaktionen, Anhänge/Uploads, QR-Code-Scannen und Push-Nachrichten.
+
+## Architektur
+
+- `src/app/` enthält Expo-Router-Routen, einschließlich Authentifizierung,
+  Tabs, Chatansicht, Einladung und Erstellung neuer Chats.
+- `src/api/` enthält den zustandslosen HTTP-Client und die API-Services.
+- `src/session/` verwaltet Server, Accounts, Anmeldung, Logout und
+  Sitzungswiederherstellung.
+- `src/storage/` verwaltet Registry, Secrets, SQLite pro Account und den
+  Web-Memory-Fallback.
+- `src/messaging/` enthält Outbox, Polling, Sync-Zyklen und Chat-Aktionen.
+- `src/hooks/` und `src/utils/` liefern lokale UI-Lesezugriffe und
+  gemeinsame Logik.
 
 ## Prüfungen
 
@@ -35,40 +73,15 @@ npm run lint
 npx tsc --noEmit
 ```
 
-Die automatisierten Tests prüfen die echten API-Services mit isoliertem Storage und simulierten Antworten: Token-Übernahme, Versand, Abmeldung, ungültige Tokens, Nachrichtenzusammenführung und Zeitformatierung. Sie erstellen keine Konten und senden keine Nachrichten an den echten Server.
+Automatisierte Tests liegen neben den implementierten Modulen und prüfen unter
+anderem Storage-Verträge, Outbox-Retry, Sync-Zyklen, Session-Verhalten und
+Zeitumrechnung. Sie richten sich nicht gegen das echte Backend.
 
-## Entwicklung
+## Dokumentation
 
-Abhängigkeiten installieren:
-
-```bash
-npm install
-```
-
-Entwicklungsserver starten:
-
-```bash
-npx expo start
-```
-
-Weitere Befehle:
-
-```bash
-npm run android
-npm run ios
-npm run web
-npm test
-npx tsc --noEmit
-npm run lint
-```
-
-Die Routen liegen unter `src/app`. Die Authentifizierung ist unter `src/app/(auth)` organisiert;
-`src/api` ist ein zustandsloser Client für den Chat-Server (keine Speicherung, kein Failover).
-Server, Konten und die Sitzung (Login, Logout, Wiederherstellung beim Start) verwaltet `src/session`.
-
-## UI/UX-Begründung
-
-`docs/ui-ux-begruendung.txt` erläutert die Gestaltung anhand von Fitts, Hick, Jakob, Gestaltprinzipien, Nielsen und ausgewählten WCAG-Kriterien. Sie nennt konkrete Stellen in Oberfläche und Code sowie Prüfergebnisse und Quellen.
+- Regeln für Mitwirkende: [AGENTS.md](AGENTS.md)
+- Architekturentscheidungen: [docs/adr/](docs/adr/)
+- KI-gestützte Entwurfsdokumentation: [docs/ai-use/](docs/ai-use/)
 
 ## Mitarbeit & KI-Nutzung
 

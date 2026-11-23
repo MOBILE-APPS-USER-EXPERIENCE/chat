@@ -28,12 +28,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const GROUP_GAP_MS = 5 * 60 * 1000; // 5 minutes
 
 function getAuthorId(entry: ListEntry | undefined, currentUserId: string) {
-  if (!entry) return undefined;
+  if (!entry || entry.kind === "day") return undefined;
   return entry.kind === "message" ? entry.message.userid : currentUserId;
 }
 
 function getTimestamp(entry: ListEntry | undefined): number | undefined {
-  if (!entry) return undefined;
+  if (!entry || entry.kind === "day") return undefined;
   return entry.kind === "message"
     ? entry.message.sentAt ?? entry.message.receivedAt
     : entry.row.createdAt;
@@ -194,9 +194,30 @@ function PendingRow({
   );
 }
 
+function SystemMessageRow({ text }: { text: string }) {
+  return (
+    <YStack w="100%" px={Spacing.three} my={Spacing.two} items="center">
+      <YStack
+        maxW="90%"
+        gap={Spacing.one}
+        rounded={Spacing.two}
+        px={Spacing.three}
+        py={Spacing.two}
+        backgroundColor="backgroundSecondary"
+        color="textSecondary"
+      >
+        <Text fontSize={12}>
+          {text}
+        </Text>
+      </YStack>
+    </YStack>
+  )
+}
+
 type ListEntry =
   | { kind: "message"; message: RawMessage }
-  | { kind: "pending"; row: OutboxRow };
+  | { kind: "pending"; row: OutboxRow }
+  | { kind: "day"; text: string };
 
 export default function ChatScreen() {
   const { chatId: chatIdParam } = useLocalSearchParams<{ chatId: string }>();
@@ -220,15 +241,37 @@ export default function ChatScreen() {
   // repository's contract). Pending rows are always newer than any confirmed message, so they
   // go first in the combined, newest-first array — reversed, so the most recently typed
   // message renders closest to the input box at the bottom of the inverted list.
-  const entries = useMemo<ListEntry[]>(
-    () => [
+  const entries = useMemo<ListEntry[]>(() => {
+    const combined: ListEntry[] = [
       ...[...pending]
         .reverse()
         .map((row): ListEntry => ({ kind: "pending", row })),
       ...messages.map((message): ListEntry => ({ kind: "message", message })),
-    ],
-    [messages, pending],
-  );
+    ];
+
+    const withSeparators: ListEntry[] = [];
+
+    combined.forEach((entry, index) => {
+      const time = getTimestamp(entry);
+      const olderEntry = combined[index + 1];
+      const olderTime = getTimestamp(olderEntry);
+
+      if (
+        time !== undefined &&
+        (olderTime === undefined ||
+          new Date(time).toDateString() !== new Date(olderTime).toDateString())
+      ) {
+        withSeparators.push({
+          kind: "day",
+          text: new Date(time).toLocaleDateString(),
+        });
+      }
+
+      withSeparators.push(entry);
+    });
+
+    return withSeparators;
+  }, [messages, pending]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: ListEntry; index: number }) => {
@@ -236,6 +279,10 @@ export default function ChatScreen() {
       const previousAuthor = getAuthorId(prev, currentUserId);
       const prevTime = getTimestamp(prev);
       const time = getTimestamp(item);
+
+      if (item.kind === "day") {
+        return <SystemMessageRow text={item.text} />;
+      }
 
       const sameAuthor =
         (item.kind === "pending" ? currentUserId : item.message.userid) ===
@@ -350,9 +397,11 @@ export default function ChatScreen() {
         <FlatList
           data={entries}
           keyExtractor={(entry) =>
-            entry.kind === "message"
-              ? `m-${entry.message.id}`
-              : `p-${entry.row.clientMessageId}`
+            entry.kind === "day"
+              ? `day-${entry.text}`
+              : entry.kind === "message"
+                ? `m-${entry.message.id}`
+                : `p-${entry.row.clientMessageId}`
           }
           renderItem={renderItem}
           inverted
