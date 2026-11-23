@@ -1,5 +1,17 @@
 {
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "ask": [
+      "Bash(npm install:*)",
+      "Bash(npx expo install:*)",
+      "Edit(src/api/**)",
+      "Edit(.github/**)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*local)"
+    ]
   }
 }

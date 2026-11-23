@@ -1,0 +1,1 @@
+ALTER TABLE `raw_messages` ADD `sent_at` integer;

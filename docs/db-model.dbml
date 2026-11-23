@@ -1,0 +1,183 @@
+Project chat_local_store {
+  database_type: 'SQLite'
+  Note: 'All ordering uses message id, never server_time. Timestamps are epoch ms.'
+}
+
+// ============================================================
+// STORE 1: APP REGISTRY (global)
+// ============================================================
+
+Enum account_status {
+  active
+  server_deleted  // login returned 454 / user no longer exists on server
+}
+
+Table servers {
+  id text [pk, not null, note: 'uuid; stored as JSON in KV store under registry.v1']
+  name text [not null]
+  url text [unique, not null, note: 'normalized, no trailing slash']
+}
+
+Table accounts {
+  id text [pk, not null, note: 'local uuid, DB file = chat_<id>.db']
+  server_id text [not null, ref: > servers.id]
+  userid text [not null]
+  user_hash text [note: 'public hash from login/register']
+  nickname text
+  status account_status [not null, default: 'active']
+  created_at integer [not null]
+  last_login_at integer
+
+  indexes {
+    (server_id, userid) [unique]
+  }
+  Note: 'No message data, no secrets. Servers and accounts are stored as JSON in the KV store under registry.v1. Tokens live in SecureStore/localStorage under token.<id>.'
+}
+
+// ============================================================
+// STORE 2: ACCOUNT DB (one file per account)
+// ============================================================
+
+Enum chat_visibility {
+  public
+  private
+}
+Enum chat_role {
+  owner
+  member
+  invited
+  admin
+  none
+}
+Enum outbox_status {
+  pending
+  sending
+  failed
+}
+Enum attachment_kind {
+  photo
+  file
+}
+Enum attachment_state {
+  remote
+  downloading
+  cached
+  failed
+}
+
+Table chats {
+  id integer [pk, not null, note: '0 = main chat']
+  name text [not null]
+  visibility chat_visibility [not null]
+  directchat boolean [not null, default: false]
+  role chat_role [not null, note: 'role of the current user']
+  joined boolean [not null]
+  owner_userid text [note: 'null for main chat / deleted owner. Soft ref to profiles.userid. stored lowercase; the mapper lowercases userids before they reach a repository']
+  first_seen_at integer [not null, note: 'local, also used as invite time (#17), unreliable']
+  missing_since integer [note: 'first time getchats omitted it; purge only after getmessages confirms 458']
+  synced_at integer [not null]
+  polled_up_to integer [not null, default: 0, note: 'highest stored message id; poll with fromid = max(polled_up_to - 1, 0)']
+  last_polled_at integer [null]
+  Note: 'Snapshot of getchats. Parent of all chat-scoped data: upsert only, delete = purgeChat().'
+}
+
+Table chat_members {
+  chat_id integer [not null]
+  userid text [not null, note: 'soft ref to profiles.userid. stored lowercase; the mapper lowercases userids before they reach a repository']
+  role chat_role [not null, note: 'owner | member | invited']
+
+  indexes {
+    (chat_id, userid) [pk]
+  }
+  Note: 'Replaced on each getchats'
+}
+
+Table profiles {
+  userid text [pk, not null, note: 'stored lowercase; the mapper lowercases userids before they reach a repository']
+  hash text [unique, not null]
+  nickname text
+  fullname text
+  fetched_at integer [not null]
+  missing_since integer [note: 'gone from getprofiles (deregister/deleteuser); keep row and local messages']
+  Note: 'Server directory. Never delete rows.'
+}
+
+Table raw_messages {
+  chat_id integer [not null]
+  id integer [not null, note: 'server message id, ascending per chat']
+  userid text [not null, note: 'soft ref to profiles.userid. stored lowercase; the mapper lowercases userids before they reach a repository']
+  user_nick text [note: 'as returned by the server at fetch time, fallback if profile is gone']
+  user_fullname text
+  user_hash text
+  server_time text [note: 'Y-m-d_H-i-s, unknown timezone, display only']
+  important boolean [not null, default: false]
+  text text [note: 'sanitised by the server: quotes are HTML entities']
+  photo_id text
+  file_id text
+  position text
+  sent_at integer [note: 'epoch ms derived from server_time with the server zone when stored; null if unparseable']
+  received_at integer [not null]
+
+  indexes {
+    (chat_id, id) [pk]
+  }
+  Note: 'INSERT OR IGNORE only, never updated.'
+}
+
+Table outbox {
+  client_message_id text [pk, note: 'local uuid, kept for the later envelope']
+  chat_id integer [not null]
+  text text
+  photo_uri text
+  file_uri text
+  position text
+  important boolean [not null, default: false]
+  status outbox_status [not null, default: 'pending']
+  attempts integer [not null, default: 0]
+  next_retry_at integer
+  last_error text
+  created_at integer [not null]
+
+  indexes {
+    (status, next_retry_at)
+  }
+  Note: 'Row is deleted after postmessage returns 200. On app start reset sending -> pending (rare duplicate possible).'
+}
+
+Table local_user_data {
+  chat_id integer [not null]
+  scope text [not null, note: 'draft | mute | read_marker']
+  key text [not null, default: '']
+  value text
+
+  indexes {
+    (chat_id, scope, key) [pk]
+  }
+  Note: 'Per-device state, never shared. Unread count = raw_messages with id > read_marker.'
+}
+
+Table attachments {
+  kind attachment_kind [not null]
+  remote_id text [not null, note: 'photoid / fileid. Not chat-bound, no FK']
+  local_uri text
+  file_name text [note: 'from Content-Disposition']
+  mime text
+  size integer
+  sha256 text
+  state attachment_state [not null, default: 'remote']
+  last_accessed_at integer
+
+  indexes {
+    (kind, remote_id) [pk]
+  }
+  Note: 'Cache index. Files live in the app sandbox, LRU eviction.'
+}
+
+// Hard refs (ON DELETE CASCADE). Needs PRAGMA foreign_keys = ON on every connection.
+Ref: chat_members.chat_id > chats.id [delete: cascade]
+Ref: raw_messages.chat_id > chats.id [delete: cascade]
+Ref: outbox.chat_id > chats.id [delete: cascade]
+Ref: local_user_data.chat_id > chats.id [delete: cascade]
+
+// Soft refs (no FK constraint in SQL, rows may legitimately be missing):
+// chats.owner_userid, chat_members.userid, raw_messages.userid -> profiles.userid
