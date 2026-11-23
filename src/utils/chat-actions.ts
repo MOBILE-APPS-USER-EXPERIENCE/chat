@@ -1,4 +1,5 @@
 import { ApiError, NetworkError } from "@/api/apiClient";
+import { ChatActionRejectedError } from "@/messaging/errors";
 
 import { describeAuthError } from "./auth-error";
 import type { ChatRow, ProfileRow } from "@/storage/types";
@@ -129,14 +130,27 @@ export function chatDisplayName(args: {
   );
 }
 
-export function describeChatActionError(error: unknown): string {
+export function describeChatActionError(
+  error: unknown,
+  context: "create" | "invite" | "join" | "reject" = "invite",
+): string {
   if (error instanceof ApiError) {
     if (error.code === 462)
       return "Der Name ist zu kurz (mindestens 2 Zeichen).";
     if (error.code === 463)
       return "Dieser Einladungshash ist unbekannt.";
+    if (error.code === 458 && context === "join")
+      return "Beitritt nicht möglich: Der Chat existiert nicht mehr oder ist privat.";
+    if (error.code === 458 && context === "reject")
+      return "Die Einladung existiert nicht mehr.";
     if (error.code === 458)
       return "Einladung nicht möglich: Du bist nicht Besitzer, der Chat existiert nicht oder der Direktchat hat schon eine Einladung.";
+  }
+  if (error instanceof ChatActionRejectedError) {
+    if (context === "join")
+      return "Beitritt nicht möglich: Der Chat existiert nicht mehr oder ist privat.";
+    if (context === "reject")
+      return "Die Einladung existiert nicht mehr.";
   }
   if (error instanceof NetworkError)
     return "Der Server ist nicht erreichbar. Bitte prüfe deine Verbindung.";

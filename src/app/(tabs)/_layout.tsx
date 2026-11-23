@@ -1,10 +1,12 @@
 import { Spacing } from "@/config/layout";
 import { Tabs } from "expo-router";
 import { useTheme } from "tamagui";
-import { MessagesCircle, User } from "../../components/icons";
+import { Compass, Mail, MessagesCircle, User } from "../../components/icons";
+import { useInvitations } from "../../hooks/use-chat-lists";
 
 export default function TabsLayout() {
   const theme = useTheme();
+  const { invitations } = useInvitations();
 
   return (
     <Tabs
@@ -33,6 +35,31 @@ export default function TabsLayout() {
           // above, so `focused` + theme tokens produce the same colors.
           tabBarIcon: ({ focused, size }) => (
             <MessagesCircle
+              color={focused ? "accent" : "textSecondary"}
+              size={size}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="public"
+        options={{
+          title: "Öffentlich",
+          tabBarIcon: ({ focused, size }) => (
+            <Compass
+              color={focused ? "accent" : "textSecondary"}
+              size={size}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="invites"
+        options={{
+          title: "Einladungen",
+          tabBarBadge: invitations.length > 0 ? invitations.length : undefined,
+          tabBarIcon: ({ focused, size }) => (
+            <Mail
               color={focused ? "accent" : "textSecondary"}
               size={size}
             />

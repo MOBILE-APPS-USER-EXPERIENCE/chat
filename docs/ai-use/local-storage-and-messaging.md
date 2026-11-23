@@ -52,6 +52,10 @@ iterated on with human feedback; it was not accepted automatically.
 - Public-chat browsing and joining is a separate planned feature that can later
   be reused for laboratory groups; it does not itself implement their
   course-to-subgroup relationship.
+- Invitations and public-chat browsing are local reads of the account's chat
+  snapshot. The selectors only show invited rows or unjoined public,
+  non-direct chats, and accept, reject and join remain network actions in
+  `ChatActions`; each action refreshes the local chat snapshot afterward.
 - Chat creation and invitations use `ChatActions` on the messaging runtime.
   `refreshChats()` waits for an active sync cycle and then refreshes only the
   chat snapshot; refresh failures do not undo a successful server creation.

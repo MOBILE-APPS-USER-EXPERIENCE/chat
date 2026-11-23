@@ -104,6 +104,8 @@ function setup(intervalMs = 5000) {
     createChatActionsApi: () => ({
       createChat: async () => 42,
       invite: async () => undefined,
+      joinChat: async () => undefined,
+      rejectInvite: async () => undefined,
     }),
     intervalMs,
   });
@@ -162,6 +164,18 @@ describe("SyncScheduler", () => {
     ).resolves.toMatchObject({ chatId: 42 });
     scheduler.stop();
     unsubscribe();
+  });
+
+  test("exposes join and reject actions and plain-errors before sign-in", async () => {
+    const { session, scheduler } = setup();
+    await expect(scheduler.joinChat(42)).rejects.toThrow("No active account");
+    await expect(scheduler.rejectInvite(42)).rejects.toThrow("No active account");
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush();
+    await expect(scheduler.joinChat(42)).resolves.toMatchObject({ refreshed: expect.any(Boolean) });
+    await expect(scheduler.rejectInvite(42)).resolves.toMatchObject({ refreshed: expect.any(Boolean) });
+    scheduler.stop();
   });
 
   test("disposes and closes storage on sign-out", async () => {

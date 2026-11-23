@@ -149,4 +149,13 @@ describe("describeChatActionError", () => {
       "nicht erreichbar",
     );
   });
+
+  it("uses join and reject context for 458", () => {
+    expect(describeChatActionError(new ApiError(458, "x"), "join")).toContain(
+      "nicht mehr oder ist privat",
+    );
+    expect(describeChatActionError(new ApiError(458, "x"), "reject")).toBe(
+      "Die Einladung existiert nicht mehr.",
+    );
+  });
 });

@@ -1,5 +1,5 @@
 import type { ChatActionsApi, ChatRefreshResult } from "./ports";
-import { InvalidTokenError } from "./errors";
+import { ChatActionRejectedError, InvalidTokenError } from "./errors";
 
 export type ChatActionResult = {
   chatId: number;
@@ -81,6 +81,37 @@ export class ChatActions {
     } catch (error) {
       return this.rethrowAfterInvalidToken(error);
     }
+  }
+
+  async joinChat(chatId: number): Promise<{ refreshed: boolean }> {
+    this.validateChatId(chatId);
+    try {
+      await this.deps.api.joinChat(chatId);
+      return { refreshed: await this.refreshAfterCreate() };
+    } catch (error) {
+      if (error instanceof ChatActionRejectedError) {
+        await this.refreshAfterCreate();
+      }
+      return this.rethrowAfterInvalidToken(error);
+    }
+  }
+
+  async rejectInvite(chatId: number): Promise<{ refreshed: boolean }> {
+    this.validateChatId(chatId);
+    try {
+      await this.deps.api.rejectInvite(chatId);
+      return { refreshed: await this.refreshAfterCreate() };
+    } catch (error) {
+      if (error instanceof ChatActionRejectedError) {
+        await this.refreshAfterCreate();
+      }
+      return this.rethrowAfterInvalidToken(error);
+    }
+  }
+
+  private validateChatId(chatId: number): void {
+    if (!Number.isSafeInteger(chatId) || chatId < 0)
+      throw new Error("Ungültige Chat-ID.");
   }
 
   private async refreshAfterCreate(): Promise<boolean> {

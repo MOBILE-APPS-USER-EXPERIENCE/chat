@@ -7,6 +7,14 @@ export class ChatNotFoundError extends Error {
     }
 }
 
+/** Server data is stale for a join or invite rejection (ApiError 458). */
+export class ChatActionRejectedError extends Error {
+    constructor(message = 'Chat action rejected') {
+        super(message);
+        this.name = 'ChatActionRejectedError';
+    }
+}
+
 /** The token is invalid (ApiError 456): the user has to log in again. */
 export class InvalidTokenError extends Error {
     constructor(message = 'Invalid token') {

@@ -80,4 +80,6 @@ export interface ChatActionsApi {
     directChat: boolean,
   ): Promise<number>;
   invite(chatId: number, hash: string): Promise<void>;
+  joinChat(chatId: number): Promise<void>;
+  rejectInvite(chatId: number): Promise<void>;
 }

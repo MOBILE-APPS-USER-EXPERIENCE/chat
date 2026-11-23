@@ -199,6 +199,22 @@ export class SyncScheduler {
     if (refreshed) this.deps.events.emitChats();
   }
 
+  async joinChat(chatId: number): Promise<{ refreshed: boolean }> {
+    if (this.chatActions === null)
+      throw new Error("No active account to join a chat");
+    const result = await this.chatActions.joinChat(chatId);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
+  async rejectInvite(chatId: number): Promise<{ refreshed: boolean }> {
+    if (this.chatActions === null)
+      throw new Error("No active account to reject an invitation");
+    const result = await this.chatActions.rejectInvite(chatId);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
   /**
    * Enqueues one text message for the active account and immediately kicks off a send attempt.
    * Throws (plain `Error`) when there is no active account storage yet, or when `text` is empty

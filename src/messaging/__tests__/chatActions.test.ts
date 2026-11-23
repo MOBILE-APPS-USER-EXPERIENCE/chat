@@ -5,7 +5,7 @@ import {
   InviteAfterCreateError,
 } from "../chatActions";
 import type { ChatActionsApi } from "../ports";
-import { InvalidTokenError } from "../errors";
+import { ChatActionRejectedError, InvalidTokenError } from "../errors";
 
 class FakeChatActionsApi implements ChatActionsApi {
   chatId = 42;
@@ -13,6 +13,10 @@ class FakeChatActionsApi implements ChatActionsApi {
   inviteCalls: { chatId: number; hash: string }[] = [];
   createError: unknown;
   inviteError: unknown;
+  joinError: unknown;
+  rejectError: unknown;
+  joinCalls: number[] = [];
+  rejectCalls: number[] = [];
 
   async createChat(name: string, isPublic: boolean, directChat: boolean) {
     this.createCalls.push({ name, isPublic, directChat });
@@ -23,6 +27,14 @@ class FakeChatActionsApi implements ChatActionsApi {
   async invite(chatId: number, hash: string) {
     this.inviteCalls.push({ chatId, hash });
     if (this.inviteError !== undefined) throw this.inviteError;
+  }
+  async joinChat(chatId: number) {
+    this.joinCalls.push(chatId);
+    if (this.joinError !== undefined) throw this.joinError;
+  }
+  async rejectInvite(chatId: number) {
+    this.rejectCalls.push(chatId);
+    if (this.rejectError !== undefined) throw this.rejectError;
   }
 }
 
@@ -161,5 +173,41 @@ describe("ChatActions", () => {
 
     await expect(actions.invite(42, " AbCd1234 ")).resolves.toBe(true);
     expect(api.inviteCalls).toEqual([{ chatId: 42, hash: "AbCd1234" }]);
+  });
+
+  it("validates join and reject ids before requests", async () => {
+    const api = new FakeChatActionsApi();
+    const actions = new ChatActions({
+      api,
+      refreshChats: async () => "updated",
+    });
+    await expect(actions.joinChat(-1)).rejects.toThrow();
+    await expect(actions.rejectInvite(1.5)).rejects.toThrow();
+    expect(api.joinCalls).toHaveLength(0);
+    expect(api.rejectCalls).toHaveLength(0);
+  });
+
+  it("refreshes once after join or reject 458 and rethrows", async () => {
+    const api = new FakeChatActionsApi();
+    api.joinError = new ChatActionRejectedError();
+    api.rejectError = new ChatActionRejectedError();
+    const refreshChats = jest.fn().mockResolvedValue("updated");
+    const actions = new ChatActions({ api, refreshChats });
+    await expect(actions.joinChat(42)).rejects.toBe(api.joinError);
+    await expect(actions.rejectInvite(43)).rejects.toBe(api.rejectError);
+    expect(refreshChats).toHaveBeenCalledTimes(2);
+  });
+
+  it("calls invalid-token handling and rethrows for join", async () => {
+    const api = new FakeChatActionsApi();
+    api.joinError = new InvalidTokenError();
+    const onInvalidToken = jest.fn();
+    const actions = new ChatActions({
+      api,
+      refreshChats: async () => "updated",
+      onInvalidToken,
+    });
+    await expect(actions.joinChat(42)).rejects.toBe(api.joinError);
+    expect(onInvalidToken).toHaveBeenCalledTimes(1);
   });
 });

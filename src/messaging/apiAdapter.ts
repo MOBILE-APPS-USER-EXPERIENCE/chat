@@ -1,12 +1,12 @@
 import { ApiError, NetworkError } from "../api/apiClient";
-import { createChat, getChats } from "../api/chatService";
-import { invite } from "../api/inviteService";
+import { createChat, getChats, joinChat } from "../api/chatService";
+import { invite, rejectInvite } from "../api/inviteService";
 import {
   postMessage as apiPostMessage,
   getMessages,
 } from "../api/messageService";
 import { getProfiles } from "../api/userService";
-import { ChatNotFoundError, InvalidTokenError } from "./errors";
+import { ChatActionRejectedError, ChatNotFoundError, InvalidTokenError } from "./errors";
 import {
   toChatSnapshots,
   toProfileInputs,
@@ -83,6 +83,28 @@ export function createChatActionsApi(): ChatActionsApi {
     },
     async invite(chatId, hash) {
       await translated(false, () => invite(chatId, hash, false));
+    },
+    async joinChat(chatId) {
+      try {
+        await joinChat(chatId);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.code === 456) throw new InvalidTokenError();
+          if (error.code === 458) throw new ChatActionRejectedError();
+        }
+        throw error;
+      }
+    },
+    async rejectInvite(chatId) {
+      try {
+        await rejectInvite(chatId);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.code === 456) throw new InvalidTokenError();
+          if (error.code === 458) throw new ChatActionRejectedError();
+        }
+        throw error;
+      }
     },
   };
 }
