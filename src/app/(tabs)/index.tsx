@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList } from "react-native";
 import { Button, isWeb, Spinner, Text, XStack, YStack } from "tamagui";
 
@@ -8,21 +9,30 @@ import { Plus } from "@/components/icons";
 import { config } from "@/config/config";
 import { Spacing } from "@/config/layout";
 import { useChatMembers } from "@/hooks/use-chat-members";
+import { useChatPreviews } from "@/hooks/use-chat-previews";
 import { useChats } from "@/hooks/use-chats";
 import { useProfiles } from "@/hooks/use-profiles";
 import { useSession } from "@/session";
-import type { ChatRow } from "@/storage/types";
+import type { ChatRow, RawMessage } from "@/storage/types";
 import { chatDisplayName } from "@/utils/chat-actions";
-import { formatDateRelative } from "@/utils/format-date-times";
+import {
+  formatChatListTime,
+  previewText,
+  sortChatsByActivity,
+} from "@/utils/chat-list-view";
 
 function ChatListItem({
   chat,
   profiles,
   selfUserid,
+  latest,
+  nowMs,
 }: Readonly<{
   chat: ChatRow;
   profiles: import("@/storage/types").ProfileRow[];
   selfUserid: string;
+  latest: RawMessage | undefined;
+  nowMs: number;
 }>) {
   const { members } = useChatMembers(chat.id, chat.directchat);
   const displayName = chatDisplayName({
@@ -61,15 +71,25 @@ function ChatListItem({
               {displayName}
             </Text>
 
-            {chat.lastPolledAt && (
-              <Text color="textSecondary" fontSize={12}>
-                Placeholder: {formatDateRelative(chat.firstSeenAt)}
-              </Text>
-            )}
+            <Text color="textSecondary" fontSize={12}>
+              {formatChatListTime(
+                latest
+                  ? latest.sentAt ?? latest.receivedAt
+                  : chat.firstSeenAt,
+                nowMs,
+              )}
+            </Text>
           </XStack>
 
-          <Text fontWeight="400" color="textSecondary" fontSize={14}>
-            Placeholder für die letzte Nachricht
+          <Text
+            fontWeight="400"
+            color="textSecondary"
+            fontSize={14}
+            numberOfLines={1}
+          >
+            {latest
+              ? previewText(latest, selfUserid, chat.directchat) || "Noch keine Nachrichten"
+              : "Noch keine Nachrichten"}
           </Text>
         </YStack>
       </XStack>
@@ -82,11 +102,15 @@ function ChatListBody({
   chats,
   profiles,
   selfUserid,
+  latestByChat,
+  nowMs,
 }: Readonly<{
   loading: boolean;
   chats: ChatRow[];
   profiles: import("@/storage/types").ProfileRow[];
   selfUserid: string;
+  latestByChat: Record<number, RawMessage>;
+  nowMs: number;
 }>) {
   if (loading) {
     return (
@@ -111,6 +135,8 @@ function ChatListBody({
           chat={item}
           profiles={profiles}
           selfUserid={selfUserid}
+          latest={latestByChat[item.id]}
+          nowMs={nowMs}
         />
       )}
     />
@@ -132,10 +158,20 @@ function NewChatButton() {
 
 export default function Index() {
   const { chats, loading } = useChats({ joined: true });
+  const previews = useChatPreviews();
   const { profiles } = useProfiles();
+  const [nowMs, setNowMs] = useState(0);
   const session = useSession();
   const selfUserid =
     session.status === "signed_in" ? session.account.userid : "";
+  const sortedChats = useMemo(
+    () => sortChatsByActivity(chats, previews.latestByChat),
+    [chats, previews.latestByChat],
+  );
+  useEffect(() => {
+    const timer = setTimeout(() => setNowMs(Date.now()), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <YStack flex={1} backgroundColor="background" pb={Spacing.four}>
@@ -152,9 +188,11 @@ export default function Index() {
       <YStack flex={1} gap={Spacing.two} pt={Spacing.two}>
         <ChatListBody
           loading={loading}
-          chats={chats}
+          chats={sortedChats}
           profiles={profiles}
           selfUserid={selfUserid}
+          latestByChat={previews.latestByChat}
+          nowMs={nowMs}
         />
       </YStack>
       {!isWeb && (

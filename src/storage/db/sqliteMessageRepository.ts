@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, lt } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, lt, sql } from 'drizzle-orm';
 
 import { toRawMessage } from './mappers';
 import { chats, rawMessages } from './schema';
@@ -22,6 +22,19 @@ export class SqliteMessageRepository implements MessageRepository {
             .where(and(eq(rawMessages.chatId, chatId), eq(rawMessages.id, id)))
             .get();
         return row ? toRawMessage(row) : null;
+    }
+
+    async listLatestPerChat() {
+        const rows = this.db.select()
+            .from(rawMessages)
+            .where(sql`raw_messages.id = (
+                select max(newer.id)
+                from raw_messages newer
+                where newer.chat_id = raw_messages.chat_id
+            )`)
+            .orderBy(asc(rawMessages.chatId))
+            .all();
+        return rows.map(toRawMessage);
     }
 
     async listPage(chatId: number, opts: { beforeId?: number; limit: number }) {

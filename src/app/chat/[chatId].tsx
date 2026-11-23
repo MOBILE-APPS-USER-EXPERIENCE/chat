@@ -22,7 +22,7 @@ import { useProfiles } from "@/hooks/use-profiles";
 import { useSession } from "@/session/useSession";
 import type { OutboxRow, RawMessage } from "@/storage/types";
 import { chatDisplayName } from "@/utils/chat-actions";
-import { formatTime } from "@/utils/format-date-times";
+import { formatClock } from "@/utils/format-date-times";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const GROUP_GAP_MS = 5 * 60 * 1000; // 5 minutes
@@ -112,7 +112,7 @@ const MessageRow = memo(function MessageRow({
         mr={-Spacing.two}
       >
         <Text color="textSecondary" fontSize={11} self="flex-end">
-          {formatTime(message.sentAt ?? message.receivedAt)}
+          {formatClock(message.sentAt ?? message.receivedAt)}
         </Text>
         {isOwn && <Check color="textSecondary" size={12} />}
       </XStack>
@@ -162,7 +162,7 @@ function PendingRow({
           </Text>
         )}
         <Text color="textSecondary" fontSize={11} self="flex-end">
-          {formatTime(row.createdAt)}
+          {formatClock(row.createdAt)}
         </Text>
         {row.status === "pending" && (
           <ClockFading color="textSecondary" size={12} aria-label="Wird gesendet" />

@@ -112,6 +112,8 @@ export interface ProfileRepository {
 export interface MessageRepository {
   /** Gets a message by chat and server id, or null when it is unknown. */
   get(chatId: number, id: number): Promise<RawMessage | null>;
+  /** Lists the highest-id message in each chat, ordered by chat id. */
+  listLatestPerChat(): Promise<RawMessage[]>;
   /** Lists messages newest first by server id, optionally before an exclusive id. */
   listPage(
     chatId: number,

@@ -18,6 +18,29 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
             }], 1000);
         });
 
+        it('lists the latest message per chat by chat id and returns copies', async () => {
+            await storage.chats.applySnapshot([
+                { id: 3, name: 'Team', visibility: 'private', directchat: false, role: 'member', joined: true, ownerUserid: null, members: [] },
+                { id: 1, name: 'Other', visibility: 'private', directchat: false, role: 'member', joined: true, ownerUserid: null, members: [] },
+                { id: 2, name: 'Empty', visibility: 'private', directchat: false, role: 'member', joined: true, ownerUserid: null, members: [] },
+            ], 1000);
+            await storage.messages.appendBatch(3, [msg(1), msg(5), msg(3)], 2000);
+            await storage.messages.appendBatch(1, [msg(2, 'first'), msg(7, 'latest')], 2000);
+            expect(await storage.messages.listLatestPerChat()).toEqual([
+                expect.objectContaining({ chatId: 1, id: 7, text: 'latest' }),
+                expect.objectContaining({ chatId: 3, id: 5, text: 'm5' }),
+            ]);
+            expect(await storage.messages.listLatestPerChat()).toHaveLength(2);
+            const latest = await storage.messages.listLatestPerChat();
+            latest[0].text = 'mutated';
+            expect((await storage.messages.listLatestPerChat())[0].text).toBe('latest');
+            expect(await storage.messages.listLatestPerChat()).not.toContainEqual(expect.objectContaining({ chatId: 2 }));
+        });
+
+        it('returns an empty latest-message list for an empty database', async () => {
+            expect(await storage.messages.listLatestPerChat()).toEqual([]);
+        });
+
         it('inserts a batch once, ignores duplicates, and advances the cursor', async () => {
             expect(await storage.messages.appendBatch(3, [msg(1), msg(2), msg(2)], 2000)).toEqual({ inserted: 2, polledUpTo: 2 });
             expect(await storage.messages.appendBatch(3, [msg(1, 'changed')], 3000)).toEqual({ inserted: 0, polledUpTo: 2 });
