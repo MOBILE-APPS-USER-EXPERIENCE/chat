@@ -88,6 +88,14 @@ export default function RootLayout() {
                   name="invite/[chatId]"
                   options={{ headerShown: false }}
                 />
+                <Stack.Screen
+                  name="exam-phase"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="exam-phase/learning-status"
+                  options={{ headerShown: false }}
+                />
               </Stack.Protected>
               <Stack.Protected guard={!signedIn}>
                 <Stack.Screen name="(auth)/login" />
