@@ -62,7 +62,7 @@ export default function NewGroupScreen() {
               <Switch.Thumb backgroundColor="background" />
             </Switch>
           </XStack>
-          <Text color="textSecondary" fontSize={FontSize.one}>
+          <Text color="textSecondary" fontSize={FontSize.small}>
             Öffentliche Gruppen kann jede Person betreten. Private Gruppen nur mit Einladung.
           </Text>
         </YStack>

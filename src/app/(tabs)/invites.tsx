@@ -5,7 +5,7 @@ import { Button, Separator, Spinner, Text, XStack, YStack } from "tamagui";
 
 import ConfirmDialog from "@/components/confirm-dialog";
 import Header from "@/components/header";
-import { Spacing } from "@/config/layout";
+import { FontSize, Spacing } from "@/config/layout";
 import { useInvitations } from "@/hooks/use-chat-lists";
 import { useChatMembers } from "@/hooks/use-chat-members";
 import { useProfiles } from "@/hooks/use-profiles";
@@ -13,6 +13,7 @@ import { syncRuntime } from "@/messaging/runtime";
 import { useSession } from "@/session";
 import type { ChatRow, ProfileRow } from "@/storage/types";
 import { chatDisplayName, describeChatActionError } from "@/utils/chat-actions";
+import { formatDateRelative } from "@/utils/format-date-times";
 
 function profileName(userid: string | null, profiles: ProfileRow[]): string {
   if (!userid) return "unbekannt";
@@ -77,6 +78,7 @@ function InvitationRow({
       <YStack gap={Spacing.one}>
         <Text fontWeight="600" color="text">{name}</Text>
         <Text color="textSecondary">Einladung von {inviter}</Text>
+        <Text color="textSecondary" fontSize={FontSize.small}>Bekommen: {formatDateRelative(chat.firstSeenAt)}</Text>
       </YStack>
       <XStack gap={Spacing.two}>
         <Button disabled={busy} onPress={() => void accept()}>Annehmen</Button>

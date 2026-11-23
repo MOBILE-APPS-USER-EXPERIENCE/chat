@@ -21,7 +21,7 @@ export default function Avatar({ label, placeholder, ...viewProps }: AvatarProps
       {...viewProps}
       aria-label={label}
     >
-      <Text fontWeight="600" color="text" fontSize={FontSize.five}>
+      <Text fontWeight="600" color="text" fontSize={FontSize.larger}>
         {placeholder}
       </Text>
     </View>

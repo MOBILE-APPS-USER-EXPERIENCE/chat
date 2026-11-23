@@ -216,7 +216,7 @@ export function ServerField({ disabled }: Readonly<Props>) {
               {servers.map((server) => (
                 <Select.Item key={server.id} value={server.id}>
                   <XStack flex={1} items="center" justify="space-between">
-                    <Select.ItemText fontSize={FontSize.three}>{server.name}</Select.ItemText>
+                    <Select.ItemText fontSize={FontSize.standard}>{server.name}</Select.ItemText>
                     <Select.ItemIndicator>
                       <Text>✓</Text>
                     </Select.ItemIndicator>
