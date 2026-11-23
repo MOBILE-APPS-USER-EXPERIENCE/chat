@@ -81,7 +81,7 @@ export default function UserPicker({
   }
 
   return (
-    <YStack gap={Spacing.two}>
+    <YStack flex={1} gap={Spacing.two}>
       <Input
         value={query}
         onChangeText={setQuery}
@@ -123,34 +123,37 @@ export default function UserPicker({
         </Button>
       )}
 
-      <FlatList
-        data={matches}
-        keyExtractor={(profile) => profile.userid}
-        renderItem={({ item }) => (
-          <Button
-            variant="quiet"
-            justify="flex-start"
-            onPress={() => addSelection({ type: "profile", profile: item })}
-            backgroundColor="hover:backgroundSelected press:backgroundSelected"
-          >
-            <YStack items="flex-start" justify="flex-start">
-              <Text fontWeight="600" color="text">
-                {item.nickname ?? item.fullname ?? item.userid}
-              </Text>
-              {item.nickname !== null && item.fullname !== null && (
-                <>
-                  <Text color="textSecondary" fontSize={12}>
-                    {item.userid}
-                  </Text>
-                  <Text color="textSecondary" fontSize={12}>
-                    {item.fullname}
-                  </Text>
-                </>
-              )}
-            </YStack>
-          </Button>
-        )}
-      />
+      <YStack flex={1}>
+        <FlatList
+          data={matches}
+          keyExtractor={(profile) => profile.userid}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => (
+            <Button
+              variant="quiet"
+              justify="flex-start"
+              onPress={() => addSelection({ type: "profile", profile: item })}
+              backgroundColor="hover:backgroundSelected press:backgroundSelected"
+            >
+              <YStack items="flex-start" justify="flex-start">
+                <Text fontWeight="600" color="text">
+                  {item.nickname ?? item.fullname ?? item.userid}
+                </Text>
+                {item.nickname !== null && item.fullname !== null && (
+                  <>
+                    <Text color="textSecondary" fontSize={12}>
+                      {item.userid}
+                    </Text>
+                    <Text color="textSecondary" fontSize={12}>
+                      {item.fullname}
+                    </Text>
+                  </>
+                )}
+              </YStack>
+            </Button>
+          )}
+        />
+      </YStack>
     </YStack>
   );
 }

@@ -34,7 +34,9 @@ function getAuthorId(entry: ListEntry | undefined, currentUserId: string) {
 
 function getTimestamp(entry: ListEntry | undefined): number | undefined {
   if (!entry) return undefined;
-  return entry.kind === "message" ? entry.message.receivedAt : entry.row.createdAt;
+  return entry.kind === "message"
+    ? entry.message.sentAt ?? entry.message.receivedAt
+    : entry.row.createdAt;
 }
 
 function Bubble({
@@ -110,7 +112,7 @@ const MessageRow = memo(function MessageRow({
         mr={-Spacing.two}
       >
         <Text color="textSecondary" fontSize={11} self="flex-end">
-          {formatTime(message.receivedAt)}
+          {formatTime(message.sentAt ?? message.receivedAt)}
         </Text>
         {isOwn && <Check color="textSecondary" size={12} />}
       </XStack>

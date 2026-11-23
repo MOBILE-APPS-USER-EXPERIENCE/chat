@@ -78,6 +78,18 @@ describe('pollChat', () => {
         expect((await t.storage.messages.get(1, 2))?.userNick).toBe('A');
     });
 
+    it('does not reset when only sentAt differs in the overlap', async () => {
+        const t = await setup();
+        t.api.messages.set(1, [msg(1), msg(2)]);
+        await pollChat(1, t.deps);
+        t.api.messages.set(1, [
+            msg(1),
+            { ...msg(2), sentAt: Date.UTC(2026, 10, 17, 10, 0, 0) },
+        ]);
+        expect(await pollChat(1, t.deps)).toEqual({ status: 'ok', inserted: 0 });
+        expect((await t.storage.messages.get(1, 2))?.sentAt).not.toBeNull();
+    });
+
     it('keeps local data and appends when the cursor message is missing and the first id is greater', async () => {
         const t = await setup();
         t.api.messages.set(1, [msg(1), msg(2), msg(3)]);

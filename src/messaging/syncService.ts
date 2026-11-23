@@ -35,6 +35,7 @@ export class SyncService {
     private readonly config: SyncConfig;
     private disposed = false;
     private running: Promise<CycleResult> | null = null;
+    private lastAppliedChatsSnapshot: string | undefined;
     private lastProfilesAt: number | undefined;
     private readonly lastOtherPollAt = new Map<number, number>();
     private readonly lastMissingCheckAt = new Map<number, number>();
@@ -90,7 +91,9 @@ export class SyncService {
         try {
             await this.syncChats(report);
             if (!this.alive()) return 'aborted';
-            return report.chats === 'updated' ? 'updated' : 'failed';
+            if (report.chats === 'updated') return 'updated';
+            if (report.chats === 'unchanged') return 'unchanged';
+            return 'failed';
         } catch (error) {
             if (!(error instanceof CycleStop)) return 'failed';
             if (!this.alive()) return 'aborted';
@@ -138,9 +141,20 @@ export class SyncService {
         const fetched = await this.attempt(null, report.errors, () => this.deps.api.getChats());
         this.assertAlive();
         if (!fetched.ok) return;   // report.chats stays 'failed'; nothing is applied
+        const snapshotJson = JSON.stringify(fetched.value);
+        if (this.lastAppliedChatsSnapshot !== undefined &&
+            snapshotJson === this.lastAppliedChatsSnapshot) {
+            report.chats = 'unchanged';
+            return;
+        }
         const applied = await this.attempt(null, report.errors, () =>
             this.deps.storage.chats.applySnapshot(fetched.value, this.deps.now()));
-        report.chats = applied.ok ? 'updated' : 'failed';
+        if (applied.ok) {
+            this.lastAppliedChatsSnapshot = snapshotJson;
+            report.chats = 'updated';
+        } else {
+            report.chats = 'failed';
+        }
     }
 
     private async syncProfiles(report: CycleDetails): Promise<void> {

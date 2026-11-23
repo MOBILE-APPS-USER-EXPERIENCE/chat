@@ -6,7 +6,7 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
         let storage: AccountStorage;
         const msg = (id: number, text = `m${id}`): RawMessageInput => ({
             id, userid: 'abcdit01', userNick: 'A', userFullname: null, userHash: null,
-            serverTime: '2026-11-17_10-00-00', important: false, text,
+            serverTime: '2026-11-17_10-00-00', sentAt: Date.UTC(2026, 10, 17, 9, 0, 0), important: false, text,
             photoId: null, fileId: null, position: null,
         });
 
@@ -119,6 +119,15 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
             expect(stored.map(message => message?.important)).toEqual([false, false, false, false, true, false]);
             expect(stored[4]).toMatchObject({ userNick: null, userFullname: 'Full Name', userHash: 'h', serverTime: null, photoId: 'p', fileId: 'f', position: '7' });
             expect(stored[5]).toMatchObject({ id: 2_000_000_000, chatId: 3 });
+        });
+
+        it('round-trips sentAt including null', async () => {
+            await storage.messages.appendBatch(3, [
+                { ...msg(1), sentAt: 123456789 },
+                { ...msg(2), sentAt: null },
+            ], 2000);
+            expect((await storage.messages.get(3, 1))?.sentAt).toBe(123456789);
+            expect((await storage.messages.get(3, 2))?.sentAt).toBeNull();
         });
     });
 }

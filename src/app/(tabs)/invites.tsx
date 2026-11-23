@@ -5,7 +5,7 @@ import { Button, Separator, Spinner, Text, XStack, YStack } from "tamagui";
 
 import ConfirmDialog from "@/components/confirm-dialog";
 import Header from "@/components/header";
-import { FontSize, Spacing } from "@/config/layout";
+import { Spacing } from "@/config/layout";
 import { useInvitations } from "@/hooks/use-chat-lists";
 import { useChatMembers } from "@/hooks/use-chat-members";
 import { useProfiles } from "@/hooks/use-profiles";
@@ -13,7 +13,6 @@ import { syncRuntime } from "@/messaging/runtime";
 import { useSession } from "@/session";
 import type { ChatRow, ProfileRow } from "@/storage/types";
 import { chatDisplayName, describeChatActionError } from "@/utils/chat-actions";
-import { formatDateRelative } from "@/utils/format-date-times";
 
 function profileName(userid: string | null, profiles: ProfileRow[]): string {
   if (!userid) return "unbekannt";
@@ -74,17 +73,18 @@ function InvitationRow({
   }
 
   return (
-    <XStack gap={Spacing.two} py={Spacing.two} justify="space-between">
-      <YStack gap={Spacing.one}>
-        <Text fontWeight="600" color="text">{name}</Text>
-        <Text color="textSecondary">Einladung von {inviter}</Text>
-        <Text color="textSecondary" fontSize={FontSize.small}>Bekommen: {formatDateRelative(chat.firstSeenAt)}</Text>
-      </YStack>
-      <XStack gap={Spacing.two}>
-        <Button disabled={busy} onPress={() => void accept()}>Annehmen</Button>
-        <Button disabled={busy} backgroundColor="error" color="errorText" onPress={() => setConfirmVisible(true)}>
-          Ablehnen
-        </Button>
+    <YStack gap={Spacing.one}>
+      <XStack gap={Spacing.two} py={Spacing.two} justify="space-between">
+        <YStack gap={Spacing.one}>
+          <Text fontWeight="600" color="text">{name}</Text>
+          <Text color="textSecondary">Einladung von {inviter}</Text>
+        </YStack>
+        <XStack gap={Spacing.two}>
+          <Button disabled={busy} onPress={() => void accept()}>Annehmen</Button>
+          <Button disabled={busy} backgroundColor="error" color="errorText" onPress={() => setConfirmVisible(true)}>
+            Ablehnen
+          </Button>
+        </XStack>
       </XStack>
       {busy && <Spinner size="small" color="accent" />}
       {!!error && <Text color="error">{error}</Text>}
@@ -96,7 +96,7 @@ function InvitationRow({
         onConfirm={() => void reject()}
         onCancel={() => setConfirmVisible(false)}
       />
-    </XStack>
+    </YStack>
   );
 }
 
@@ -117,6 +117,7 @@ function EmptySafeInvitationList({
     <FlatList
       data={invitations}
       keyExtractor={(chat) => String(chat.id)}
+      keyboardShouldPersistTaps="handled"
       renderItem={({ item }) => (
         <InvitationRow chat={item} profiles={profiles} selfUserid={selfUserid} />
       )}

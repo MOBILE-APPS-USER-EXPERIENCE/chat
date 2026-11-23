@@ -14,6 +14,7 @@ import type {
 import { SyncService } from "../syncService";
 import type { ForegroundSignal } from "./foregroundSignal";
 import type { StorageEvents } from "./storageEvents";
+import { parseServerTime } from "../serverTime";
 
 const DEFAULT_INTERVAL_MS = 5000;
 
@@ -21,6 +22,7 @@ export type SessionLike = {
   getState(): {
     status: "initializing" | "signed_out" | "signed_in";
     account?: { id: string };
+    server?: { url: string };
   };
   subscribe(listener: () => void): () => void;
 };
@@ -28,7 +30,7 @@ export type SessionLike = {
 export type SchedulerDeps = {
   session: SessionLike;
   openAccountStorage: (accountId: string) => Promise<AccountStorage>;
-  createSyncApi: () => SyncApi;
+  createSyncApi: (server: { url: string }) => SyncApi;
   createChatActionsApi: () => import("../ports").ChatActionsApi;
   foreground: ForegroundSignal;
   events: StorageEvents;
@@ -243,7 +245,9 @@ export class SyncScheduler {
 
   async discardOutboxMessage(clientMessageId: string): Promise<boolean> {
     if (this.outboxService === null) return false;
-    return this.outboxService.discard(clientMessageId);
+    const discarded = await this.outboxService.discard(clientMessageId);
+    if (discarded) this.flushOutbox();
+    return discarded;
   }
 
   // ---- session / foreground transitions --------------------------------------------------
@@ -397,6 +401,8 @@ export class SyncScheduler {
     const accountId = this.currentAccountId;
     if (accountId === null || this.stopped || generation !== this.generation)
       return false;
+    const state = this.deps.session.getState();
+    if (state.status !== "signed_in" || state.server === undefined) return false;
     let storage: AccountStorage | null = null;
     try {
       storage = await this.deps.openAccountStorage(accountId);
@@ -406,7 +412,7 @@ export class SyncScheduler {
         });
         return false;
       }
-      const api = this.deps.createSyncApi();
+      const api = this.deps.createSyncApi(state.server);
       const serviceDeps: SyncDeps = {
         api,
         storage,
@@ -475,6 +481,30 @@ export class SyncScheduler {
           // Superseded while initializing the outbox: discard cleanly.
         });
         return false;
+      }
+
+      const chats = await storage.chats.list();
+      if (!this.isCurrentAccount(accountId, generation)) {
+        await storage.close().catch(() => {
+          // Superseded during the repair scan: discard this handle.
+        });
+        return false;
+      }
+      for (const chat of chats) {
+        if (!this.isCurrentAccount(accountId, generation)) break;
+        if (!chat.joined) continue;
+        const [newest] = await storage.messages.listPage(chat.id, { limit: 1 });
+        if (!this.isCurrentAccount(accountId, generation)) break;
+        if (
+          newest !== undefined &&
+          newest.sentAt === null &&
+          newest.serverTime !== null &&
+          parseServerTime(newest.serverTime) !== null
+        ) {
+          await storage.messages.resetChat(chat.id);
+          if (!this.isCurrentAccount(accountId, generation)) break;
+          this.deps.events.emitMessages(chat.id);
+        }
       }
 
       this.storage = storage;

@@ -1,0 +1,497 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "75abc596-6957-43ee-b8f5-a5371dd7b09c",
+  "prevId": "6a8761f4-e3cf-41ac-a2ea-d85231f0cd40",
+  "tables": {
+    "chat_members": {
+      "name": "chat_members",
+      "columns": {
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userid": {
+          "name": "userid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "chat_members_chat_id_chats_id_fk": {
+          "name": "chat_members_chat_id_chats_id_fk",
+          "tableFrom": "chat_members",
+          "tableTo": "chats",
+          "columnsFrom": [
+            "chat_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "chat_members_chat_id_userid_pk": {
+          "columns": [
+            "chat_id",
+            "userid"
+          ],
+          "name": "chat_members_chat_id_userid_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "chat_members_role_check": {
+          "name": "chat_members_role_check",
+          "value": "role in ('owner', 'member', 'invited')"
+        }
+      }
+    },
+    "chats": {
+      "name": "chats",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "directchat": {
+          "name": "directchat",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "joined": {
+          "name": "joined",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_userid": {
+          "name": "owner_userid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "missing_since": {
+          "name": "missing_since",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "polled_up_to": {
+          "name": "polled_up_to",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_polled_at": {
+          "name": "last_polled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "chats_visibility_check": {
+          "name": "chats_visibility_check",
+          "value": "visibility in ('public', 'private')"
+        },
+        "chats_role_check": {
+          "name": "chats_role_check",
+          "value": "role in ('owner', 'member', 'invited', 'admin', 'none')"
+        }
+      }
+    },
+    "outbox": {
+      "name": "outbox",
+      "columns": {
+        "client_message_id": {
+          "name": "client_message_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "photo_uri": {
+          "name": "photo_uri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "file_uri": {
+          "name": "file_uri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "important": {
+          "name": "important",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "next_retry_at": {
+          "name": "next_retry_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "outbox_status_next_retry_idx": {
+          "name": "outbox_status_next_retry_idx",
+          "columns": [
+            "status",
+            "next_retry_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "outbox_chat_id_chats_id_fk": {
+          "name": "outbox_chat_id_chats_id_fk",
+          "tableFrom": "outbox",
+          "tableTo": "chats",
+          "columnsFrom": [
+            "chat_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "outbox_status_check": {
+          "name": "outbox_status_check",
+          "value": "status in ('pending', 'sending', 'failed')"
+        }
+      }
+    },
+    "profiles": {
+      "name": "profiles",
+      "columns": {
+        "userid": {
+          "name": "userid",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nickname": {
+          "name": "nickname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fullname": {
+          "name": "fullname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "missing_since": {
+          "name": "missing_since",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "profiles_hash_unique": {
+          "name": "profiles_hash_unique",
+          "columns": [
+            "hash"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "raw_messages": {
+      "name": "raw_messages",
+      "columns": {
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userid": {
+          "name": "userid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_nick": {
+          "name": "user_nick",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_fullname": {
+          "name": "user_fullname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_hash": {
+          "name": "user_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "server_time": {
+          "name": "server_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "important": {
+          "name": "important",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "photo_id": {
+          "name": "photo_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "file_id": {
+          "name": "file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "raw_messages_chat_id_chats_id_fk": {
+          "name": "raw_messages_chat_id_chats_id_fk",
+          "tableFrom": "raw_messages",
+          "tableTo": "chats",
+          "columnsFrom": [
+            "chat_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "raw_messages_chat_id_id_pk": {
+          "columns": [
+            "chat_id",
+            "id"
+          ],
+          "name": "raw_messages_chat_id_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

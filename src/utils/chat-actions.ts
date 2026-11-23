@@ -151,6 +151,8 @@ export function describeChatActionError(
       return "Beitritt nicht möglich: Der Chat existiert nicht mehr oder ist privat.";
     if (context === "reject")
       return "Die Einladung existiert nicht mehr.";
+    if (context === "create" || context === "invite")
+      return "Die Aktion ist nicht mehr möglich. Die Liste wurde aktualisiert.";
   }
   if (error instanceof NetworkError)
     return "Der Server ist nicht erreichbar. Bitte prüfe deine Verbindung.";

@@ -51,7 +51,7 @@ export type PollResult =
 export type SyncErrorInfo = { chatId: number | null; message: string };
 
 export type CycleDetails = {
-  chats: "updated" | "failed";
+  chats: "updated" | "unchanged" | "failed";
   profiles: "skipped" | "updated" | "conflict" | "failed";
   polled: { chatId: number; result: PollResult }[];
   purged: number[];
@@ -68,6 +68,7 @@ export type CycleOptions = { openChatId?: number };
 
 export type ChatRefreshResult =
   | "updated"
+  | "unchanged"
   | "failed"
   | "offline"
   | "invalid_token"

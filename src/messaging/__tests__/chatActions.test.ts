@@ -153,6 +153,17 @@ describe("ChatActions", () => {
     ).resolves.toEqual({ chatId: 42, refreshed: false });
   });
 
+  it("reports refreshed true when chat refresh is unchanged", async () => {
+    const api = new FakeChatActionsApi();
+    const actions = new ChatActions({
+      api,
+      refreshChats: async () => "unchanged",
+    });
+    await expect(
+      actions.createGroup({ name: "Test", isPublic: true }),
+    ).resolves.toEqual({ chatId: 42, refreshed: true });
+  });
+
   it("passes NetworkError unchanged on invite", async () => {
     const api = new FakeChatActionsApi();
     const networkError = new Error("network");

@@ -62,6 +62,11 @@ iterated on with human feedback; it was not accepted automatically.
   Direct-chat names are display names only: the server receives the combined
   name, while the local UI resolves the other participant from chat members and
   profiles and keeps the chat name unchanged.
+- Sent times convert server wall-clock `time` to epoch `sentAt` using a per-server
+  zone map, while server id remains the only basis for message order.
+- A wrong zone shifts displayed clocks by a constant but does not change order or grouping.
+- The local cache resets once for a chat whose newest stored message has parseable
+  `serverTime` and missing `sentAt`; unparseable time does not cause reset loops.
 
 ## Verification and responsibility
 

@@ -67,6 +67,7 @@ export class SqliteMessageRepository implements MessageRepository {
                         userFullname: message.userFullname,
                         userHash: message.userHash,
                         serverTime: message.serverTime,
+                        sentAt: message.sentAt,
                         important: message.important,
                         text: message.text,
                         photoId: message.photoId,

@@ -62,6 +62,7 @@ export function toRawMessage(row: MessageRowDb): RawMessage {
     userFullname: row.userFullname,
     userHash: row.userHash,
     serverTime: row.serverTime,
+    sentAt: row.sentAt,
     important: row.important,
     text: row.text,
     photoId: row.photoId,

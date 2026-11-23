@@ -12,13 +12,15 @@ import {
 import { createForegroundSignal } from "./foregroundSignal";
 import { StorageEvents } from "./storageEvents";
 import { SyncScheduler } from "./syncScheduler";
+import { serverTimeZoneForUrl } from "../../session/serverTimeZone";
 
 export const storageEvents = new StorageEvents();
 
 export const syncRuntime = new SyncScheduler({
   session,
   openAccountStorage: (accountId) => accountStorage.open(accountId),
-  createSyncApi: () => createSyncApi(),
+  createSyncApi: (server) =>
+    createSyncApi({ timeZone: serverTimeZoneForUrl(server.url) }),
   createChatActionsApi: () => createChatActionsApi(),
   foreground: createForegroundSignal(),
   events: storageEvents,

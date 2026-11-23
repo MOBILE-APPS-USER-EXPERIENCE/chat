@@ -43,15 +43,17 @@ function PublicRow({
   }
 
   return (
-    <XStack gap={Spacing.two} py={Spacing.four} justify="space-between">
-      <YStack gap={Spacing.one}>
-        <Text fontWeight="600" color="text">{chat.name}</Text>
-        <Text color="textSecondary">Besitzer: {ownerName(chat, profiles)}</Text>
-      </YStack>
-      <Button disabled={busy} onPress={() => void join()} h={Spacing.inputHeight}>Beitreten</Button>
+    <YStack gap={Spacing.one}>
+      <XStack gap={Spacing.two} py={Spacing.four} justify="space-between">
+        <YStack gap={Spacing.one}>
+          <Text fontWeight="600" color="text">{chat.name}</Text>
+          <Text color="textSecondary">Besitzer: {ownerName(chat, profiles)}</Text>
+        </YStack>
+        <Button disabled={busy} onPress={() => void join()} h={Spacing.inputHeight}>Beitreten</Button>
+      </XStack>
       {busy && <Spinner size="small" color="accent" />}
       {!!error && <Text color="error">{error}</Text>}
-    </XStack>
+    </YStack>
   );
 }
 
@@ -76,6 +78,7 @@ function EmptySafeChatList({
       keyExtractor={(chat) => String(chat.id)}
       renderItem={({ item }) => <PublicRow chat={item} profiles={profiles} />}
       ItemSeparatorComponent={<Separator borderColor={"backgroundSelected"} />}
+      keyboardShouldPersistTaps="handled"
     />
   )
 }
@@ -89,7 +92,7 @@ export default function PublicScreen() {
   return (
     <YStack flex={1} backgroundColor="background">
       <Header title="Öffentlich" showBackButton={false} />
-      <YStack px={Spacing.three} pt={Spacing.two} pb={Spacing.one} gap={Spacing.two}>
+      <YStack flex={1} px={Spacing.three} pt={Spacing.two} pb={Spacing.one} gap={Spacing.two}>
         <Input
           value={query}
           onChangeText={setQuery}

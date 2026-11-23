@@ -117,7 +117,7 @@ export class ChatActions {
   private async refreshAfterCreate(): Promise<boolean> {
     try {
       const result = await this.deps.refreshChats();
-      return result === "updated";
+      return result === "updated" || result === "unchanged";
     } catch {
       return false;
     }

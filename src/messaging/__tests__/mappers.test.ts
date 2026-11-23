@@ -209,12 +209,20 @@ describe('toRawMessageInput', () => {
         expect(toRawMessageInput(REAL_MESSAGE)).toEqual({
             id: 1, userid: 'luweit01', userNick: 'Luka', userFullname: 'Luka', userHash: 'VQDf08LE',
             serverTime: '2026-10-26_13-29-49', important: false, text: 'Hello everyone',
+            sentAt: Date.UTC(2026, 9, 26, 12, 29, 49),
             photoId: null, fileId: null, position: null,
         });
     });
 
     it('lowercases the userid and maps time to serverTime', () => {
         expect(toRawMessageInput(base)).toMatchObject({ userid: 'abcdit01', serverTime: '2026-10-26_13-29-49' });
+    });
+
+    it('fills sentAt and returns null for unparseable time', () => {
+        expect(toRawMessageInput({ ...base, time: '2026-10-26_13-29-49' }, 'Europe/Berlin').sentAt)
+            .toBe(Date.UTC(2026, 9, 26, 12, 29, 49));
+        expect(toRawMessageInput({ ...base, time: '2026-02-30_13-29-49' }, 'Europe/Berlin').sentAt)
+            .toBeNull();
     });
 
     it('maps a missing text to null and keeps an empty text', () => {
@@ -233,7 +241,7 @@ describe('toRawMessageInput', () => {
         const minimal = toRawMessageInput({ id: 1, userid: 'a' });
         expect(minimal).toEqual({
             id: 1, userid: 'a', userNick: null, userFullname: null, userHash: null, serverTime: null,
-            important: false, text: null, photoId: null, fileId: null, position: null,
+            sentAt: null, important: false, text: null, photoId: null, fileId: null, position: null,
         });
         expect(toRawMessageInput({ ...base, photoid: undefined, fileid: undefined, position: undefined, usernick: undefined }))
             .toMatchObject({ photoId: null, fileId: null, position: null, userNick: null });

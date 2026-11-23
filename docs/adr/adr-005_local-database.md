@@ -262,33 +262,33 @@ SDK 58 (see Risks).
 | 4   | Web (Firefox)                                               | Delete DB, reload, Open + migrate: DB is empty again                                                                | ✔      |
 | 5   | Web (Firefox)                                               | Cascade test works                                                                                                  | ✔      |
 | 6   | Web (Firefox)                                               | Normal login against a chat server still works with COOP/COEP active                                                | ✔      |
-| 1   | Web (static export + proposed headers)                      | Spike: Open + migrate succeeds; driver and capabilities shown                                                       |        |
-| 2   | Web (static export + proposed headers)                      | Write, reload, Read: data still there                                                                               |        |
-| 3   | Web (static export + proposed headers)                      | Two tabs: Write in one, Read in the other; note errors or locks                                                     |        |
-| 4   | Web (static export + proposed headers)                      | Delete DB, reload, Open + migrate: DB is empty again                                                                |        |
-| 5   | Web (static export + proposed headers)                      | Cascade test works                                                                                                  |        |
-| 6   | Web (static export + proposed headers)                      | Normal login against a chat server still works with COOP/COEP active                                                |        |
-| 1   | Android (Expo Go)                                           | Spike: Open + migrate succeeds; driver and capabilities shown                                                       |        |
-| 2   | Android (Expo Go)                                           | Write, kill and restart the app, Read: data still there                                                             |        |
-| 3   | Android (Expo Go)                                           | Cascade test works                                                                                                  |        |
-| 4   | Android (Expo Go)                                           | Delete DB, restart, Open + migrate: DB is empty again                                                               |        |
+| 1   | Web (static export + proposed headers)                      | Spike: Open + migrate succeeds; driver and capabilities shown                                                       | ✔      |
+| 2   | Web (static export + proposed headers)                      | Write, reload, Read: data still there                                                                               | ✔      |
+| 3   | Web (static export + proposed headers)                      | Two tabs: Write in one, Read in the other; note errors or locks                                                     | ✔      |
+| 4   | Web (static export + proposed headers)                      | Delete DB, reload, Open + migrate: DB is empty again                                                                | ✔      |
+| 5   | Web (static export + proposed headers)                      | Cascade test works                                                                                                  | ✔      |
+| 6   | Web (static export + proposed headers)                      | Normal login against a chat server still works with COOP/COEP active                                                | ✔      |
+| 1   | Android (Expo Go)                                           | Spike: Open + migrate succeeds; driver and capabilities shown                                                       | ✔      |
+| 2   | Android (Expo Go)                                           | Write, kill and restart the app, Read: data still there                                                             | ✔      |
+| 3   | Android (Expo Go)                                           | Cascade test works                                                                                                  | ✔      |
+| 4   | Android (Expo Go)                                           | Delete DB, restart, Open + migrate: DB is empty again                                                               | ✔      |
 | 1   | iOS (Expo Go)                                               | Spike: Open + migrate succeeds; driver and capabilities shown                                                       |        |
 | 2   | iOS (Expo Go)                                               | Write, kill and restart the app, Read: data still there                                                             |        |
 | 3   | iOS (Expo Go)                                               | Cascade test works                                                                                                  |        |
 | 4   | iOS (Expo Go)                                               | Delete DB, restart, Open + migrate: DB is empty again                                                               |        |
-| 1   | Web (Chrome)                                                | Repos: status shows `sqlite`; Write via repos, reload, Read via repos: data still there                             |        |
-| 2   | Web (Chrome)                                                | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains                                                         |        |
-| 3   | Web (Chrome)                                                | Repos: Delete account storage, reload, Read via repos: empty                                                        |        |
-| 4   | Web (Chrome)                                                | Repos: Two tabs: write in one, read in the other; note errors                                                       |        |
-| 1   | Web (Firefox)                                               | Repos: status shows `sqlite`; Write via repos, reload, Read via repos: data still there                             |        |
-| 2   | Web (Firefox)                                               | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains                                                         |        |
-| 3   | Web (Firefox)                                               | Repos: Delete account storage, reload, Read via repos: empty                                                        |        |
-| 4   | Web (Firefox)                                               | Repos: Two tabs: write in one, read in the other; note errors                                                       |        |
-| 1   | Web (static export, no isolation headers, `npx serve dist`) | Repos: status shows `memory` with reason `no_isolation`; app starts, login works, data gone after reload (expected) |        |
-| 2   | Web (static export, no isolation headers, `npx serve dist`) | Repos: Write via repos, reload, Read via repos: empty again (memory mode)                                           |        |
-| 1   | Android (Expo Go)                                           | Repos: status shows `sqlite`; Write via repos, kill and restart, Read via repos: data still there                   |        |
-| 2   | Android (Expo Go)                                           | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains                                                         |        |
-| 3   | Android (Expo Go)                                           | Repos: Delete account storage, restart, Read via repos: empty                                                       |        |
+| 1   | Web (Chrome)                                                | Repos: status shows `sqlite`; Write via repos, reload, Read via repos: data still there                             | ✔      |
+| 2   | Web (Chrome)                                                | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains                                                         | ✔      |
+| 3   | Web (Chrome)                                                | Repos: Delete account storage, reload, Read via repos: empty                                                        | ✔      |
+| 4   | Web (Chrome)                                                | Repos: Two tabs: write in one, read in the other; note errors                                                       | ✔      |
+| 1   | Web (Firefox)                                               | Repos: status shows `sqlite`; Write via repos, reload, Read via repos: data still there                             | ✔      |
+| 2   | Web (Firefox)                                               | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains                                                         | ✔      |
+| 3   | Web (Firefox)                                               | Repos: Delete account storage, reload, Read via repos: empty                                                        | ✔      |
+| 4   | Web (Firefox)                                               | Repos: Two tabs: write in one, read in the other; note errors                                                       | ✔      |
+| 1   | Web (static export, no isolation headers, `npx serve dist`) | Repos: status shows `memory` with reason `no_isolation`; app starts, login works, data gone after reload (expected) | ✔      |
+| 2   | Web (static export, no isolation headers, `npx serve dist`) | Repos: Write via repos, reload, Read via repos: empty again (memory mode)                                           | ✔      |
+| 1   | Android (Expo Go)                                           | Repos: status shows `sqlite`; Write via repos, kill and restart, Read via repos: data still there                   | ✔      |
+| 2   | Android (Expo Go)                                           | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains                                                         | ✔      |
+| 3   | Android (Expo Go)                                           | Repos: Delete account storage, restart, Read via repos: empty                                                       | ✔      |
 | 1   | iOS (Expo Go)                                               | Repos: status shows `sqlite`; Write via repos, kill and restart, Read via repos: data still there                   |        |
 | 2   | iOS (Expo Go)                                               | Repos: Purge chat 1: chat 1 + messages gone, chat 2 remains                                                         |        |
 | 3   | iOS (Expo Go)                                               | Repos: Delete account storage, restart, Read via repos: empty                                                       |        |

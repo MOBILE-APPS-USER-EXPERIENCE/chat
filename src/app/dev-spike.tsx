@@ -103,7 +103,7 @@ export default function DevSpikeScreen() {
                         .run();
                     for (const id of [1, 2, 3]) {
                         tx.insert(rawMessages)
-                            .values({ chatId: 1, id, userid: 'spike-user', text: `message ${id}`, receivedAt: now })
+                            .values({ chatId: 1, id, userid: 'spike-user', text: `message ${id}`, sentAt: null, receivedAt: now })
                             .onConflictDoNothing()
                             .run();
                     }
@@ -177,7 +177,7 @@ export default function DevSpikeScreen() {
                 ], now);
                 const result = await storage.messages.appendBatch(1, [1, 2, 3].map(id => ({
                     id, userid: 'spike-user', userNick: 'Spike', userFullname: null, userHash: null,
-                    serverTime: null, important: false, text: `repo message ${id}`,
+                    serverTime: null, sentAt: null, important: false, text: `repo message ${id}`,
                     photoId: null, fileId: null, position: null,
                 })), now);
                 return `wrote 2 chats, members, ${result.inserted} messages, cursor ${result.polledUpTo}`;

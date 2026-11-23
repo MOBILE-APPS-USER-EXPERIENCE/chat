@@ -13,10 +13,12 @@ import {
   toRawMessageInputs,
 } from "./mappers";
 import type { ChatActionsApi, SyncApi } from "./ports";
+import type { ServerTimeZone } from "./serverTime";
 
 /** The only file in `src/messaging` that imports `src/api`. */
 
 export type SyncApiOptions = {
+  timeZone?: ServerTimeZone;
   /** Called with the number of invalid profile entries that were dropped from one response. */
   onProfilesDropped?: (count: number) => void;
 };
@@ -42,7 +44,10 @@ async function translated<T>(
   }
 }
 
-export function createSyncApi(options: SyncApiOptions = {}): SyncApi {
+export function createSyncApi(
+  options: SyncApiOptions = { timeZone: "Europe/Berlin" },
+): SyncApi {
+  const timeZone = options.timeZone ?? "Europe/Berlin";
   // `useAdminKey` is always false: sync must never fetch admin-visible data.
   return {
     async getChats() {
@@ -59,7 +64,7 @@ export function createSyncApi(options: SyncApiOptions = {}): SyncApi {
       const messages = await translated(true, () =>
         getMessages({ fromid: fromId, chatid: chatId, useAdminKey: false }),
       );
-      return toRawMessageInputs(messages);
+      return toRawMessageInputs(messages, timeZone);
     },
     async postMessage(chatId, text, important) {
       // `postmessage` is chat-scoped: an invalid/non-member chatid answers 458 (docs/openapi.yaml).

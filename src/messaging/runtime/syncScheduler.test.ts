@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { MemoryAccountStorageFactory } from "../../storage/memory";
 import type { AccountStorage } from "../../storage/ports";
-import { FakeSyncApi, isFakeNetworkError, snap } from "../__tests__/fakes";
+import { FakeNetworkError, FakeSyncApi, isFakeNetworkError, snap } from "../__tests__/fakes";
 import { InvalidTokenError } from "../errors";
 import type { ForegroundSignal } from "./foregroundSignal";
 import { StorageEvents } from "./storageEvents";
@@ -27,7 +27,13 @@ class FakeSession implements SessionLike {
   }
 
   setState(state: SessionState): void {
-    this.state = state;
+    this.state =
+      state.status === "signed_in" && state.server === undefined
+        ? {
+            ...state,
+            server: { url: "https://www2.hs-esslingen.de/~chkohl/chat" },
+          }
+        : state;
     for (const listener of [...this.listeners]) listener();
   }
 }
@@ -100,7 +106,7 @@ function setup(intervalMs = 5000) {
         },
       };
     },
-    createSyncApi: () => api,
+    createSyncApi: (_server: { url: string }) => api,
     createChatActionsApi: () => ({
       createChat: async () => 42,
       invite: async () => undefined,
@@ -147,6 +153,7 @@ describe("SyncScheduler", () => {
     expect(scheduler.getStatus().status).toBe("ok");
     scheduler.stop();
   });
+
 
   test("exposes chat actions for the active account and emits chats on refresh", async () => {
     const { session, scheduler, events } = setup();
@@ -309,6 +316,25 @@ describe("SyncScheduler", () => {
     scheduler.stop();
   });
 
+  test("scheduler emits chats once across two identical cycles", async () => {
+    jest.useFakeTimers();
+    const { session, scheduler, factory, api, events } = setup(5000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    const listener = jest.fn();
+    events.subscribeChats(listener);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+    await jest.advanceTimersByTimeAsync(5000);
+    await flush(80);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    scheduler.stop();
+  });
+
   test("emits emitMessages only for chats with actual inserts or a purge", async () => {
     const { session, scheduler, factory, api, events } = setup();
     const storage = await factory.open("acc1");
@@ -324,6 +350,7 @@ describe("SyncScheduler", () => {
         userFullname: null,
         userHash: null,
         serverTime: null,
+        sentAt: null,
         important: false,
         text: "t",
         photoId: null,
@@ -506,6 +533,7 @@ describe("SyncScheduler", () => {
         userFullname: null,
         userHash: null,
         serverTime: null,
+        sentAt: null,
         important: false,
         text: "hello",
         photoId: null,
@@ -614,6 +642,93 @@ describe("SyncScheduler", () => {
     expect(await scheduler.discardOutboxMessage("cid-discard")).toBe(true);
     expect(await storage.outbox.listByChat(1)).toEqual([]);
     expect(listener).toHaveBeenCalled();
+    scheduler.stop();
+  });
+
+  test("discarding the first future-failed row immediately sends the second row", async () => {
+    const { session, scheduler, factory, api } = setup(60_000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    await storage.outbox.enqueue(
+      { chatId: 1, text: "first", important: false, photoUri: null, fileUri: null, position: null },
+      "cid-first",
+      Date.now(),
+    );
+    await storage.outbox.enqueue(
+      { chatId: 1, text: "second", important: false, photoUri: null, fileUri: null, position: null },
+      "cid-second",
+      Date.now(),
+    );
+    await storage.outbox.markFailed("cid-first", "offline", Date.now() + 60_000);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    expect(await scheduler.discardOutboxMessage("cid-first")).toBe(true);
+    await flush(80);
+    expect(api.postMessageCalls.map((call) => call.text)).toEqual(["second"]);
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+    scheduler.stop();
+  });
+
+  test("discarding the first future-failed row immediately turns the second row offline", async () => {
+    const { session, scheduler, factory, api } = setup(60_000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.failWith("postMessage", new FakeNetworkError());
+    await storage.outbox.enqueue(
+      { chatId: 1, text: "first", important: false, photoUri: null, fileUri: null, position: null },
+      "cid-first",
+      Date.now(),
+    );
+    await storage.outbox.enqueue(
+      { chatId: 1, text: "second", important: false, photoUri: null, fileUri: null, position: null },
+      "cid-second",
+      Date.now(),
+    );
+    await storage.outbox.markFailed("cid-first", "offline", Date.now() + 60_000);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    expect(await scheduler.discardOutboxMessage("cid-first")).toBe(true);
+    await flush(80);
+    const rows = await storage.outbox.listByChat(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ text: "second", status: "failed", lastError: "offline" });
+    scheduler.stop();
+  });
+
+  test("discarding a sending row returns false and triggers no flush", async () => {
+    const { session, scheduler, factory, api } = setup(60_000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+    await storage.outbox.enqueue(
+      { chatId: 1, text: "sending", important: false, photoUri: null, fileUri: null, position: null },
+      "cid-sending",
+      Date.now(),
+    );
+    await storage.outbox.markSending("cid-sending");
+    await storage.outbox.enqueue(
+      { chatId: 1, text: "pending", important: false, photoUri: null, fileUri: null, position: null },
+      "cid-pending",
+      Date.now(),
+    );
+
+    expect(await scheduler.discardOutboxMessage("cid-sending")).toBe(false);
+    await flush(80);
+    expect(api.postMessageCalls).toEqual([]);
+    expect((await storage.outbox.listByChat(1)).map((row) => row.status)).toEqual(
+      expect.arrayContaining(["sending", "pending"]),
+    );
     scheduler.stop();
   });
 

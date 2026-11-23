@@ -1,6 +1,7 @@
 /** @jest-environment node */
 
 import { ApiError, NetworkError } from "@/api/apiClient";
+import { ChatActionRejectedError } from "@/messaging/errors";
 
 import type { ChatRow, ProfileRow } from "@/storage/types";
 import {
@@ -157,5 +158,17 @@ describe("describeChatActionError", () => {
     expect(describeChatActionError(new ApiError(458, "x"), "reject")).toBe(
       "Die Einladung existiert nicht mehr.",
     );
+  });
+
+  it("uses the refreshed-list message for ChatActionRejectedError in create context", () => {
+    expect(
+      describeChatActionError(new ChatActionRejectedError(), "create"),
+    ).toBe("Die Aktion ist nicht mehr möglich. Die Liste wurde aktualisiert.");
+  });
+
+  it("uses the refreshed-list message for ChatActionRejectedError in invite context", () => {
+    expect(
+      describeChatActionError(new ChatActionRejectedError(), "invite"),
+    ).toBe("Die Aktion ist nicht mehr möglich. Die Liste wurde aktualisiert.");
   });
 });

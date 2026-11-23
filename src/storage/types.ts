@@ -44,6 +44,7 @@ export type RawMessageInput = {
   userFullname: string | null;
   userHash: string | null;
   serverTime: string | null;
+  sentAt: number | null;
   important: boolean;
   text: string | null;
   photoId: string | null;
