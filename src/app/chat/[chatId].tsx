@@ -256,6 +256,11 @@ export default function ChatScreen() {
       const olderEntry = combined[index + 1];
       const olderTime = getTimestamp(olderEntry);
 
+      // Push the entry first, so that the day separator appears *after* the last message of the
+      // previous day, and before the first message of the new day. (list is inverted, so the
+      // "first" message is the newest one, at the bottom of the list.)
+      withSeparators.push(entry);
+
       if (
         time !== undefined &&
         (olderTime === undefined ||
@@ -267,7 +272,6 @@ export default function ChatScreen() {
         });
       }
 
-      withSeparators.push(entry);
     });
 
     return withSeparators;

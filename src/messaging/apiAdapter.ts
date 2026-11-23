@@ -45,9 +45,9 @@ async function translated<T>(
 }
 
 export function createSyncApi(
-  options: SyncApiOptions = { timeZone: "Europe/Berlin" },
+  options: SyncApiOptions = { timeZone: "UTC" },
 ): SyncApi {
-  const timeZone = options.timeZone ?? "Europe/Berlin";
+  const timeZone = options.timeZone ?? "UTC";
   // `useAdminKey` is always false: sync must never fetch admin-visible data.
   return {
     async getChats() {

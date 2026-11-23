@@ -16,7 +16,7 @@
 | Abmelden | Ja lokal | Logout löscht den lokalen Token und die aktive Account-Auswahl; die Serverabmeldung läuft offline nur als 5-Sekunden-Best-Effort |
 | Server hinzufügen | Auswahl/Registrierung nur nach Erreichbarkeitstest | Eine eingegebene URL wird geparst und per `ping` geprüft; nur ein erreichbarer Server kann hinzugefügt und ausgewählt werden |
 
-Quellen: [src/messaging/outboxService.ts](/K:/repos/chat/src/messaging/outboxService.ts), [src/messaging/chatActions.ts](/K:/repos/chat/src/messaging/chatActions.ts), [src/session/sessionService.ts](/K:/repos/chat/src/session/sessionService.ts), [src/hooks/use-messages.ts](/K:/repos/chat/src/hooks/use-messages.ts).
+Quellen: [src/messaging/outboxService.ts](/src/messaging/outboxService.ts), [src/messaging/chatActions.ts](/src/messaging/chatActions.ts), [src/session/sessionService.ts](/src/session/sessionService.ts), [src/hooks/use-messages.ts](/src/hooks/use-messages.ts).
 
 ## Outbox-Lebenszyklus
 
@@ -34,18 +34,18 @@ Eine Zeile hat einen der Zustände `pending`, `sending` oder `failed`.
 - Der Server liefert keine lokale Idempotenzkorrelation zurück. Wird ein ungewisser oder abgebrochener Versand später erneut gesendet, kann dieselbe Nachricht serverseitig doppelt angenommen werden; ein Duplikat kann nicht automatisch erkannt werden.
 - Eine Zeile kann nur verworfen werden, wenn sie nicht `sending` ist. Nach einem erfolgreichen Verwerfen wird die Warteschlange unmittelbar erneut geflusht. Ein änderbares `Verwerfen`-Element zeigt die UI nur für `failed`-Zeilen an.
 
-Quellen: [src/messaging/outboxService.ts](/K:/repos/chat/src/messaging/outboxService.ts), [src/storage/db/sqliteOutboxRepository.ts](/K:/repos/chat/src/storage/db/sqliteOutboxRepository.ts), [src/messaging/runtime/syncScheduler.ts](/K:/repos/chat/src/messaging/runtime/syncScheduler.ts), [src/app/chat/[chatId].tsx](/K:/repos/chat/src/app/chat/[chatId].tsx).
+Quellen: [src/messaging/outboxService.ts](/src/messaging/outboxService.ts), [src/storage/db/sqliteOutboxRepository.ts](/src/storage/db/sqliteOutboxRepository.ts), [src/messaging/runtime/syncScheduler.ts](/src/messaging/runtime/syncScheduler.ts), [src/app/chat/[chatId].tsx](/src/app/chat/[chatId].tsx).
 
 ## `sentAt`, Server-Zone und Cache
 
-`sentAt` ist die aus dem Serverfeld `time` berechnete Epoche in Millisekunden. Der Wert wird beim Einlesen einer Nachricht in [src/messaging/mappers.ts](/K:/repos/chat/src/messaging/mappers.ts) gesetzt, in `raw_messages.sent_at` gespeichert und für Sortierung sowie Uhrzeitdarstellung verwendet.
+`sentAt` ist die aus dem Serverfeld `time` berechnete Epoche in Millisekunden. Der Wert wird beim Einlesen einer Nachricht in [src/messaging/mappers.ts](/src/messaging/mappers.ts) gesetzt, in `raw_messages.sent_at` gespeichert und für Sortierung sowie Uhrzeitdarstellung verwendet.
 
-Die Code-Zonenkarte in [src/session/serverTimeZone.ts](/K:/repos/chat/src/session/serverTimeZone.ts) ordnet URLs zu:
+Die Code-Zonenkarte in [src/session/serverTimeZone.ts](/src/session/serverTimeZone.ts) ordnet URLs zu:
 
 | Server | Zone |
 |---|---|
-| HS-Default-URL `https://www2.hs-esslingen.de/~chkohl/chat` | `Europe/Berlin` |
-| Backup-URL `https://api.chat.throin.de` | `UTC` |
+| HS-Default-URL `https:/www2.hs-esslingen.de/~chkohl/chat` | `Europe/Berlin` |
+| Backup-URL `https:/api.chat.throin.de` | `UTC` |
 | Andere/custom URLs | `UTC` |
 
 Annahme **unverified**: Der HS-Server verwendet tatsächlich Europe/Berlin inklusive Sommer-/Winterzeit. Der Code bildet die Berliner Übergänge nach; wenn diese Annahme falsch ist, verschieben sich angezeigte Uhrzeiten um eine konstante Stundenabweichung, während Server-ID, Reihenfolge und Gruppierung unverändert bleiben. `sentAt` darf bei nicht parsebarem `time` `null` bleiben.
@@ -68,13 +68,13 @@ Die Vorschau liest die höchste Server-Nachrichten-ID je Chat und zeigt:
 
 Pending-, sending- oder failed-Outbox-Zeilen erscheinen **nicht** in der Chatlisten-Vorschau. Die Vorschau basiert ausschließlich auf gespeicherten bestätigten `raw_messages`. Pending/failed Nachrichten erscheinen im geöffneten Chatbildschirm in der lokalen kombinierten Nachrichtenliste.
 
-Quellen: [src/utils/chat-list-view.ts](/K:/repos/chat/src/utils/chat-list-view.ts), [src/app/(tabs)/index.tsx](/K:/repos/chat/src/app/(tabs)/index.tsx), [src/hooks/use-chat-previews.ts](/K:/repos/chat/src/hooks/use-chat-previews.ts).
+Quellen: [src/utils/chat-list-view.ts](/src/utils/chat-list-view.ts), [src/app/(tabs)/index.tsx](/src/app/(tabs)/index.tsx), [src/hooks/use-chat-previews.ts](/src/hooks/use-chat-previews.ts).
 
 ## Einmaliger Reset bei fehlendem `sentAt`
 
 Beim Öffnen des Account-Storage wird ein Repair-Scan ausgeführt. Wenn für einen beigetretenen Chat die höchste gespeicherte Nachricht `sentAt === null`, aber `serverTime` parsebar ist, wird nur dieser Chat zurückgesetzt: Alle gespeicherten `raw_messages` des Chats und `polledUpTo` werden gelöscht. Das Chat-Zeilenobjekt, Mitglieder, Profile, Outbox-Zeilen und andere Chats bleiben erhalten. Danach werden die Nachrichten normal neu abgerufen. Der Repair läuft einmal pro Account-Öffnung; ein unparsebarer Wert löst keinen Reset aus.
 
-Quellen: [src/messaging/runtime/syncScheduler.ts](/K:/repos/chat/src/messaging/runtime/syncScheduler.ts), [src/storage/db/sqliteMessageRepository.ts](/K:/repos/chat/src/storage/db/sqliteMessageRepository.ts).
+Quellen: [src/messaging/runtime/syncScheduler.ts](/src/messaging/runtime/syncScheduler.ts), [src/storage/db/sqliteMessageRepository.ts](/src/storage/db/sqliteMessageRepository.ts).
 
 ## Sync-Takt und Offline-Lesen
 
@@ -88,7 +88,7 @@ Quellen: [src/messaging/runtime/syncScheduler.ts](/K:/repos/chat/src/messaging/r
 - Identische Chat-Snapshots werden nach Merge von Task 9c.1 nicht erneut angewendet; der Code führt dafür einen in-Memory-Vergleich des vorherigen JSON-Snapshots. `Identisch` bedeutet dieselbe JSON-Darstellung des gefetchten Snapshots.
 - Ein Netzwerkfehler beendet den laufenden Zyklus; lokale Daten bleiben erhalten und werden weiterhin angezeigt.
 
-Quellen: [src/messaging/runtime/syncScheduler.ts](/K:/repos/chat/src/messaging/runtime/syncScheduler.ts), [src/messaging/syncService.ts](/K:/repos/chat/src/messaging/syncService.ts), [src/messaging/ports.ts](/K:/repos/chat/src/messaging/ports.ts).
+Quellen: [src/messaging/runtime/syncScheduler.ts](/src/messaging/runtime/syncScheduler.ts), [src/messaging/syncService.ts](/src/messaging/syncService.ts), [src/messaging/ports.ts](/src/messaging/ports.ts).
 
 ## Speicher und Sitzung
 
@@ -103,7 +103,7 @@ Quellen: [src/messaging/runtime/syncScheduler.ts](/K:/repos/chat/src/messaging/r
 - `Logout` löscht Token und aktive Auswahl, behält aber Registry-Account und Account-Datenbank.
 - `Deregister`/Account löschen löscht zuerst nach Servererfolg Secrets, Registry-Eintrag und lokale Account-Daten; bei Netzwerk- oder Serverfehler bleibt lokal alles unverändert.
 
-Quellen: [src/storage/accountStorageManager.ts](/K:/repos/chat/src/storage/accountStorageManager.ts), [src/storage/db/openDatabase.ts](/K:/repos/chat/src/storage/db/openDatabase.ts), [src/session/sessionService.ts](/K:/repos/chat/src/session/sessionService.ts), [docs/adr/adr-003_web-secret-storage.md](/K:/repos/chat/docs/adr/adr-003_web-secret-storage.md).
+Quellen: [src/storage/accountStorageManager.ts](/src/storage/accountStorageManager.ts), [src/storage/db/openDatabase.ts](/src/storage/db/openDatabase.ts), [src/session/sessionService.ts](/src/session/sessionService.ts), [docs/adr/adr-003_web-secret-storage.md](/docs/adr/adr-003_web-secret-storage.md).
 
 ## Bekannte Grenzen
 
