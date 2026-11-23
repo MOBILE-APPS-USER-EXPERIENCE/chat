@@ -12,9 +12,12 @@ export const Spacing = {
   eleven: 80,
   twelve: 88,
   thirteen: 96,
+  inputHeight: 56,
+  maxNewMessageHeight: 240,
 } as const;
 
 export const FontSize = {
+  zero: 10,
   one: 12,
   two: 14,
   three: 16,

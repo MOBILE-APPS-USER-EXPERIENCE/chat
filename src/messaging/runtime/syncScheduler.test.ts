@@ -101,6 +101,10 @@ function setup(intervalMs = 5000) {
       };
     },
     createSyncApi: () => api,
+    createChatActionsApi: () => ({
+      createChat: async () => 42,
+      invite: async () => undefined,
+    }),
     intervalMs,
   });
 
@@ -140,6 +144,24 @@ describe("SyncScheduler", () => {
     expect(api.callsOf("getChats")).toHaveLength(1);
     expect(scheduler.getStatus().status).toBe("ok");
     scheduler.stop();
+  });
+
+  test("exposes chat actions for the active account and emits chats on refresh", async () => {
+    const { session, scheduler, events } = setup();
+    const emitted: number[] = [];
+    const unsubscribe = events.subscribeChats(() => emitted.push(1));
+    await expect(scheduler.createGroup({ name: "Test", isPublic: false })).rejects.toThrow(
+      "No active account",
+    );
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush();
+
+    await expect(
+      scheduler.createGroup({ name: "Test", isPublic: false }),
+    ).resolves.toMatchObject({ chatId: 42 });
+    scheduler.stop();
+    unsubscribe();
   });
 
   test("disposes and closes storage on sign-out", async () => {

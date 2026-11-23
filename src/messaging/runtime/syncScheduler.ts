@@ -2,6 +2,7 @@
 // `src/messaging/ports.ts` already type-imports `AccountStorage` the same way.
 import type { AccountStorage } from "../../storage/ports";
 import { OutboxService, type OutboxDeps } from "../outboxService";
+import { ChatActions, type ChatActionResult } from "../chatActions";
 import type {
   CycleOptions,
   CycleResult,
@@ -28,6 +29,7 @@ export type SchedulerDeps = {
   session: SessionLike;
   openAccountStorage: (accountId: string) => Promise<AccountStorage>;
   createSyncApi: () => SyncApi;
+  createChatActionsApi: () => import("../ports").ChatActionsApi;
   foreground: ForegroundSignal;
   events: StorageEvents;
   now: () => number;
@@ -71,6 +73,7 @@ export class SyncScheduler {
   private storage: AccountStorage | null = null;
   private syncService: SyncService | null = null;
   private outboxService: OutboxService | null = null;
+  private chatActions: ChatActions | null = null;
   private openChatId: number | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
@@ -115,6 +118,7 @@ export class SyncScheduler {
     const storage = this.storage;
     this.syncService = null;
     this.outboxService = null;
+    this.chatActions = null;
     this.storage = null;
     this.currentAccountId = null;
     this.resetStatus();
@@ -166,6 +170,35 @@ export class SyncScheduler {
     return result;
   }
 
+  async createGroup(input: {
+    name: string;
+    isPublic: boolean;
+  }): Promise<ChatActionResult> {
+    if (this.chatActions === null)
+      throw new Error("No active account to create a chat");
+    const result = await this.chatActions.createGroup(input);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
+  async createDirectChat(input: {
+    name: string;
+    inviteeHash: string;
+  }): Promise<ChatActionResult> {
+    if (this.chatActions === null)
+      throw new Error("No active account to create a chat");
+    const result = await this.chatActions.createDirectChat(input);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
+  async inviteToChat(chatId: number, hash: string): Promise<void> {
+    if (this.chatActions === null)
+      throw new Error("No active account to invite a person");
+    const refreshed = await this.chatActions.invite(chatId, hash);
+    if (refreshed) this.deps.events.emitChats();
+  }
+
   /**
    * Enqueues one text message for the active account and immediately kicks off a send attempt.
    * Throws (plain `Error`) when there is no active account storage yet, or when `text` is empty
@@ -215,6 +248,7 @@ export class SyncScheduler {
     this.syncService = null;
     this.outboxService = null;
     this.outboxDrainState = null;
+    this.chatActions = null;
     this.storage = null;
     this.currentAccountId = nextAccountId;
     this.resetStatus();
@@ -393,6 +427,15 @@ export class SyncScheduler {
         },
       };
       const outboxService = new OutboxService(outboxDeps);
+      const chatActions = new ChatActions({
+        api: this.deps.createChatActionsApi(),
+        refreshChats: async () => {
+          const result = await syncService.refreshChats();
+          if (result === "updated") this.deps.events.emitChats();
+          return result;
+        },
+        onInvalidToken: this.deps.onInvalidToken,
+      });
       // Recovers rows left 'sending' by a crash mid-send. Treated the same as a failed storage
       // open on failure: discard everything constructed so far and retry on the next tick.
       await outboxService.init();
@@ -408,6 +451,7 @@ export class SyncScheduler {
       this.storage = storage;
       this.syncService = syncService;
       this.outboxService = outboxService;
+      this.chatActions = chatActions;
       this.outboxDrainState = { inFlight: false, dirty: false };
       return true;
     } catch {

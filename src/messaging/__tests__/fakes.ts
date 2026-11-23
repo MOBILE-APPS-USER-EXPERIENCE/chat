@@ -45,6 +45,7 @@ export class FakeSyncApi implements SyncApi {
   onCall: ((call: ApiCall) => void) | null = null;
   private readonly failures: Failure[] = [];
   private gate: Promise<void> | null = null;
+  private chatsGate: Promise<void> | null = null;
   private postGate: Promise<void> | null = null;
 
   /** Makes matching requests fail until the end of the test. */
@@ -64,6 +65,17 @@ export class FakeSyncApi implements SyncApi {
     });
     return () => {
       this.gate = null;
+      open();
+    };
+  }
+
+  holdChats(): () => void {
+    let open!: () => void;
+    this.chatsGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return () => {
+      this.chatsGate = null;
       open();
     };
   }
@@ -90,10 +102,13 @@ export class FakeSyncApi implements SyncApi {
 
   async getChats(): Promise<ChatSnapshot[]> {
     await this.enter({ method: "getChats" });
-    return this.chats.map((chat) => ({
+    const snapshot = this.chats.map((chat) => ({
       ...chat,
       members: chat.members.map((member) => ({ ...member })),
     }));
+    const chatsGate = this.chatsGate;
+    if (chatsGate !== null) await chatsGate;
+    return snapshot;
   }
 
   async getProfiles(): Promise<ProfileInput[]> {

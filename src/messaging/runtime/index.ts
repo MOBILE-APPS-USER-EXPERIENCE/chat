@@ -4,7 +4,11 @@
 import { session } from "../../session";
 import { newId } from "../../storage";
 import { accountStorage } from "../../storage/accountStorage";
-import { createSyncApi, isNetworkError } from "../apiAdapter";
+import {
+  createChatActionsApi,
+  createSyncApi,
+  isNetworkError,
+} from "../apiAdapter";
 import { createForegroundSignal } from "./foregroundSignal";
 import { StorageEvents } from "./storageEvents";
 import { SyncScheduler } from "./syncScheduler";
@@ -15,6 +19,7 @@ export const syncRuntime = new SyncScheduler({
   session,
   openAccountStorage: (accountId) => accountStorage.open(accountId),
   createSyncApi: () => createSyncApi(),
+  createChatActionsApi: () => createChatActionsApi(),
   foreground: createForegroundSignal(),
   events: storageEvents,
   now: Date.now,

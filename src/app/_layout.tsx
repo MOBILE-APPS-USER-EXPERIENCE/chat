@@ -68,6 +68,26 @@ export default function RootLayout() {
                   name="chat/[chatId]"
                   options={{ headerShown: false }}
                 />
+                <Stack.Screen
+                  name="new-chat"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="new-chat/group"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="new-chat/direct"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="new-chat/scan"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="invite/[chatId]"
+                  options={{ headerShown: false }}
+                />
               </Stack.Protected>
               <Stack.Protected guard={!signedIn}>
                 <Stack.Screen name="(auth)/login" />

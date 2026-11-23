@@ -500,4 +500,39 @@ describe.each(backends)('SyncService (%s storage)', (_name, makeStorage) => {
         expect((await h.storage.chats.get(1))?.syncedAt).toBe((syncedBefore ?? 0) + 5_000);
         expect((await h.storage.chats.get(1))?.lastPolledAt).toBe(6_000);
     });
+
+    it('refreshChats waits for a held cycle then fetches again instead of using a stale snapshot', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1, { name: 'Stale' })];
+        const release = h.api.holdChats();
+        const cycle = h.service.runCycle();
+        await flush();
+
+        h.api.chats = [snap(1, { name: 'Newer' })];
+        const refresh = h.service.refreshChats();
+        await flush();
+        expect(h.api.callsOf('getChats')).toHaveLength(1);
+
+        release();
+        await cycle;
+        expect(await refresh).toBe('updated');
+        expect((await h.storage.chats.get(1))?.name).toBe('Newer');
+        expect(h.api.callsOf('getChats')).toHaveLength(2);
+    });
+
+    it('refreshChats 456 calls onInvalidToken once', async () => {
+        const h = await harness(makeStorage);
+        h.api.failWith('getChats', new InvalidTokenError());
+        expect(await h.service.refreshChats()).toBe('invalid_token');
+        expect(h.onInvalidToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('refreshChats stale account does not write', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1)];
+        h.api.onCall = () => { h.state.current = false; };
+        expect(await h.service.refreshChats()).toBe('aborted');
+        expect(await h.storage.chats.list()).toEqual([]);
+        expect(h.onInvalidToken).not.toHaveBeenCalled();
+    });
 });

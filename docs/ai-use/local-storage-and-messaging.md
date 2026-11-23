@@ -52,6 +52,12 @@ iterated on with human feedback; it was not accepted automatically.
 - Public-chat browsing and joining is a separate planned feature that can later
   be reused for laboratory groups; it does not itself implement their
   course-to-subgroup relationship.
+- Chat creation and invitations use `ChatActions` on the messaging runtime.
+  `refreshChats()` waits for an active sync cycle and then refreshes only the
+  chat snapshot; refresh failures do not undo a successful server creation.
+  Direct-chat names are display names only: the server receives the combined
+  name, while the local UI resolves the other participant from chat members and
+  profiles and keeps the chat name unchanged.
 
 ## Verification and responsibility
 

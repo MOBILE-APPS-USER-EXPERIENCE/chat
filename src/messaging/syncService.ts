@@ -2,7 +2,7 @@ import type { ChatRow } from '../storage/types';
 import { ChatNotFoundError, InvalidTokenError } from './errors';
 import { pollChat } from './pollChat';
 import type {
-    CycleDetails, CycleOptions, CycleResult, PollResult, SyncConfig, SyncDeps, SyncErrorInfo,
+    ChatRefreshResult, CycleDetails, CycleOptions, CycleResult, PollResult, SyncConfig, SyncDeps, SyncErrorInfo,
 } from './ports';
 import { DEFAULT_SYNC_CONFIG } from './ports';
 
@@ -67,6 +67,39 @@ export class SyncService {
         } catch (error) {
             if (error instanceof InvalidTokenError && this.alive()) this.deps.onInvalidToken?.();
             throw error;
+        }
+    }
+
+    /**
+     * Refreshes only the chat list. If a cycle is already running, wait for it to finish first
+     * and then fetch once more, so a stale snapshot cannot overwrite a newer server snapshot.
+     */
+    async refreshChats(): Promise<ChatRefreshResult> {
+        if (!this.alive()) return 'aborted';
+        if (this.running !== null) {
+            await this.running.catch(() => undefined);
+            if (!this.alive()) return 'aborted';
+        }
+        const report: CycleDetails = {
+            chats: 'failed',
+            profiles: 'skipped',
+            polled: [],
+            purged: [],
+            errors: [],
+        };
+        try {
+            await this.syncChats(report);
+            if (!this.alive()) return 'aborted';
+            return report.chats === 'updated' ? 'updated' : 'failed';
+        } catch (error) {
+            if (!(error instanceof CycleStop)) return 'failed';
+            if (!this.alive()) return 'aborted';
+            if (error.reason === 'invalid_token') {
+                this.deps.onInvalidToken?.();
+                return 'invalid_token';
+            }
+            if (error.reason === 'offline') return 'offline';
+            return 'aborted';
         }
     }
 

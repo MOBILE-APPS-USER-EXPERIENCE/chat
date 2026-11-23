@@ -1,16 +1,36 @@
 import { router } from "expo-router";
 import { FlatList } from "react-native";
-import { Button, Spinner, Text, XStack, YStack } from "tamagui";
+import { Button, isWeb, Spinner, Text, XStack, YStack } from "tamagui";
 
 import Avatar from "@/components/avatar";
 import Header from "@/components/header";
+import { Plus } from "@/components/icons";
 import { config } from "@/config/config";
 import { Spacing } from "@/config/layout";
+import { useChatMembers } from "@/hooks/use-chat-members";
 import { useChats } from "@/hooks/use-chats";
+import { useProfiles } from "@/hooks/use-profiles";
+import { useSession } from "@/session";
 import type { ChatRow } from "@/storage/types";
+import { chatDisplayName } from "@/utils/chat-actions";
 import { formatDateRelative } from "@/utils/format-date-times";
 
-function ChatListItem({ chat }: Readonly<{ chat: ChatRow }>) {
+function ChatListItem({
+  chat,
+  profiles,
+  selfUserid,
+}: Readonly<{
+  chat: ChatRow;
+  profiles: import("@/storage/types").ProfileRow[];
+  selfUserid: string;
+}>) {
+  const { members } = useChatMembers(chat.id);
+  const displayName = chatDisplayName({
+    chat,
+    members,
+    profiles,
+    selfUserid,
+  });
   return (
     <Button
       variant={"quiet"}
@@ -30,11 +50,15 @@ function ChatListItem({ chat }: Readonly<{ chat: ChatRow }>) {
         justify="flex-start"
         w="100%"
       >
-        <Avatar label={`Avatar für ${chat.name}`} placeholder={chat.name[0]} />
+        <Avatar
+          label={`Avatar für ${displayName}`}
+          placeholder={displayName[0]?.toUpperCase() ?? "A"}
+          mr={Spacing.two}
+        />
         <YStack items="flex-start" gap={Spacing.two} flex={1} w="100%">
           <XStack items="center" w="100%" justify="space-between">
             <Text fontWeight="600" color="text" fontSize={16}>
-              {chat.name}
+              {displayName}
             </Text>
 
             {chat.lastPolledAt && (
@@ -56,7 +80,14 @@ function ChatListItem({ chat }: Readonly<{ chat: ChatRow }>) {
 function ChatListBody({
   loading,
   chats,
-}: Readonly<{ loading: boolean; chats: ChatRow[] }>) {
+  profiles,
+  selfUserid,
+}: Readonly<{
+  loading: boolean;
+  chats: ChatRow[];
+  profiles: import("@/storage/types").ProfileRow[];
+  selfUserid: string;
+}>) {
   if (loading) {
     return (
       <YStack flex={1} items="center" justify="center">
@@ -75,21 +106,66 @@ function ChatListBody({
     <FlatList
       data={chats}
       keyExtractor={(chat) => String(chat.id)}
-      renderItem={({ item }) => <ChatListItem chat={item} />}
+      renderItem={({ item }) => (
+        <ChatListItem
+          chat={item}
+          profiles={profiles}
+          selfUserid={selfUserid}
+        />
+      )}
     />
   );
 }
 
+function NewChatButton() {
+  return <Button
+    circular
+    size="lg"
+    aria-label="Neuer Chat"
+    onPress={() => router.push("/new-chat")}
+    backgroundColor="accent"
+    color="accentContrast"
+  >
+    <Plus color="accentContrast" />
+  </Button>
+}
+
 export default function Index() {
   const { chats, loading } = useChats({ joined: true });
+  const { profiles } = useProfiles();
+  const session = useSession();
+  const selfUserid =
+    session.status === "signed_in" ? session.account.userid : "";
 
   return (
     <YStack flex={1} backgroundColor="background" pb={Spacing.four}>
-      <Header title={config.appName} showBackButton={false} />
+      <Header
+        title={config.appName}
+        showBackButton={false}
+        action={
+          isWeb ? (
+            <NewChatButton />
+          ) : undefined
+        }
+      />
 
       <YStack flex={1} gap={Spacing.two} pt={Spacing.two}>
-        <ChatListBody loading={loading} chats={chats} />
+        <ChatListBody
+          loading={loading}
+          chats={chats}
+          profiles={profiles}
+          selfUserid={selfUserid}
+        />
       </YStack>
+      {!isWeb && (
+        <YStack
+          self="flex-end"
+          mr={Spacing.three}
+          mb={Spacing.two}
+        >
+          <NewChatButton />
+        </YStack>
+      )}
     </YStack>
   );
 }

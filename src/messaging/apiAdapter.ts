@@ -1,5 +1,6 @@
 import { ApiError, NetworkError } from "../api/apiClient";
-import { getChats } from "../api/chatService";
+import { createChat, getChats } from "../api/chatService";
+import { invite } from "../api/inviteService";
 import {
   postMessage as apiPostMessage,
   getMessages,
@@ -11,7 +12,7 @@ import {
   toProfileInputs,
   toRawMessageInputs,
 } from "./mappers";
-import type { SyncApi } from "./ports";
+import type { ChatActionsApi, SyncApi } from "./ports";
 
 /** The only file in `src/messaging` that imports `src/api`. */
 
@@ -65,6 +66,23 @@ export function createSyncApi(options: SyncApiOptions = {}): SyncApi {
       await translated(true, () =>
         apiPostMessage({ chatid: chatId, text, important }),
       );
+    },
+  };
+}
+
+export function createChatActionsApi(): ChatActionsApi {
+  return {
+    async createChat(name, isPublic, directChat) {
+      return translated(false, () =>
+        createChat({
+          chatname: name,
+          ispublic: isPublic,
+          directchat: directChat,
+        }),
+      );
+    },
+    async invite(chatId, hash) {
+      await translated(false, () => invite(chatId, hash, false));
     },
   };
 }

@@ -65,3 +65,19 @@ export type CycleResult =
   | { status: "aborted" };
 
 export type CycleOptions = { openChatId?: number };
+
+export type ChatRefreshResult =
+  | "updated"
+  | "failed"
+  | "offline"
+  | "invalid_token"
+  | "aborted";
+
+export interface ChatActionsApi {
+  createChat(
+    name: string,
+    isPublic: boolean,
+    directChat: boolean,
+  ): Promise<number>;
+  invite(chatId: number, hash: string): Promise<void>;
+}

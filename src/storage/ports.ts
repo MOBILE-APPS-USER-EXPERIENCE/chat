@@ -96,6 +96,8 @@ export interface ChatRepository {
 }
 
 export interface ProfileRepository {
+  /** Lists all known profiles, ordered by userid. */
+  list(): Promise<ProfileRow[]>;
   /** Gets a profile by userid, or null when it is unknown. */
   get(userid: string): Promise<ProfileRow | null>;
   /** Gets a profile by its unique hash, or null when it is unknown. */

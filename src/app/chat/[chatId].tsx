@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { memo, useCallback, useMemo, useState } from "react";
 import { FlatList, KeyboardAvoidingView } from "react-native";
 import { Button, isWeb, Spinner, Text, TextArea, XStack, YStack } from "tamagui";
@@ -11,14 +11,19 @@ import {
   CloudUpload,
   OctagonX,
   SendHorizontal,
+  UserPlus,
 } from "@/components/icons";
 import { Spacing } from "@/config/layout";
 import { useChat } from "@/hooks/use-chat";
+import { useChatMembers } from "@/hooks/use-chat-members";
 import { useMessages } from "@/hooks/use-messages";
 import { useOutbox } from "@/hooks/use-outbox";
+import { useProfiles } from "@/hooks/use-profiles";
 import { useSession } from "@/session/useSession";
 import type { OutboxRow, RawMessage } from "@/storage/types";
+import { chatDisplayName } from "@/utils/chat-actions";
 import { formatTime } from "@/utils/format-date-times";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const GROUP_GAP_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -202,6 +207,9 @@ export default function ChatScreen() {
   const [inputHeight, setInputHeight] = useState(44);
   const [discardRow, setDiscardRow] = useState<OutboxRow | null>(null);
   const session = useSession();
+  const { profiles } = useProfiles();
+  const { members } = useChatMembers(chatId);
+  const insets = useSafeAreaInsets();
 
   const currentUserId =
     session?.status === "signed_in" ? session.account.userid : "";
@@ -261,6 +269,15 @@ export default function ChatScreen() {
   );
 
   const canSend = text.trim().length > 0 && !sending;
+  const displayName =
+    chat === null
+      ? "…"
+      : chatDisplayName({
+        chat,
+        members,
+        profiles,
+        selfUserid: currentUserId,
+      });
 
   async function handleSend() {
     const toSend = text;
@@ -294,11 +311,34 @@ export default function ChatScreen() {
   }
 
   return (
-    <YStack flex={1} backgroundColor="background">
+    <YStack flex={1} backgroundColor="background"
+      pb={insets.bottom}>
       <Header
-        title={chat?.name ?? "…"}
-        avatar={{ label: "Avatar", placeholder: "A" }}
+        title={displayName}
+        avatar={{
+          label: `Avatar für ${displayName}`,
+          placeholder: displayName[0]?.toUpperCase() ?? "A",
+        }}
         showBackButton={true}
+        action={
+          chat !== null &&
+            chat.role === "owner" &&
+            !chat.directchat &&
+            chat.id !== 0 ? (
+            <Button
+              variant="quiet"
+              aria-label="Person einladen"
+              onPress={() =>
+                router.push({
+                  pathname: "/invite/[chatId]",
+                  params: { chatId: String(chat.id) },
+                })
+              }
+            >
+              <UserPlus color="text" />
+            </Button>
+          ) : undefined
+        }
       />
       {loading ? (
         <YStack flex={1} items="center" justify="center">
@@ -327,9 +367,7 @@ export default function ChatScreen() {
         <YStack
           gap={Spacing.one}
           px={Spacing.three}
-          py={Spacing.two}
-          borderTopWidth={1}
-          borderColor="backgroundSelected"
+          py={Spacing.three}
         >
           <XStack gap={Spacing.two} items="flex-end">
             <TextArea
@@ -339,12 +377,14 @@ export default function ChatScreen() {
               placeholder="Nachricht…"
               borderColor="backgroundSelected"
               color="text"
+              backgroundColor="backgroundElement"
+              placeholderTextColor="textSecondary"
               h={inputHeight}
-              minH={44}
-              maxH={120}
+              minH={Spacing.inputHeight}
+              maxH={Spacing.maxNewMessageHeight}
               px={Spacing.three}
               py={Spacing.two}
-              textAlignVertical="top"
+              textAlignVertical="center"
               onKeyDown={(e) => {
                 const { key, shiftKey, isComposing } = e.nativeEvent as {
                   key: string;
@@ -359,11 +399,18 @@ export default function ChatScreen() {
               }}
               onContentSizeChange={(e) =>
                 setInputHeight(
-                  Math.min(120, Math.max(44, e.nativeEvent.contentSize.height)),
+                  Math.min(Spacing.maxNewMessageHeight, Math.max(Spacing.inputHeight, e.nativeEvent.contentSize.height)),
                 )
               }
             />
-            <Button disabled={!canSend} onPress={() => void handleSend()}>
+            <Button
+              disabled={!canSend}
+              onPress={() => void handleSend()}
+              circular
+              size="lg"
+              mb={2}
+              backgroundColor={canSend ? "accent" : "backgroundSelected"}
+            >
               {sending ? (
                 <Spinner color="text" />
               ) : (

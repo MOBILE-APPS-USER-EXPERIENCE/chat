@@ -5,6 +5,12 @@ import { MemoryDb } from './memoryStorage';
 export class MemoryProfileRepository implements ProfileRepository {
     constructor(private readonly db: MemoryDb) { }
 
+    async list() {
+        return [...this.db.profiles.values()]
+            .sort((a, b) => a.userid < b.userid ? -1 : a.userid > b.userid ? 1 : 0)
+            .map((profile) => ({ ...profile }));
+    }
+
     async get(userid: string) {
         const profile = this.db.profiles.get(userid);
         return profile ? { ...profile } : null;
