@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, lt, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, lt, sql } from 'drizzle-orm';
 
 import { toRawMessage } from './mappers';
 import { chats, rawMessages } from './schema';
@@ -25,16 +25,37 @@ export class SqliteMessageRepository implements MessageRepository {
     }
 
     async listLatestPerChat() {
-        const rows = this.db.select()
-            .from(rawMessages)
-            .where(sql`raw_messages.id = (
-                select max(newer.id)
-                from raw_messages newer
-                where newer.chat_id = raw_messages.chat_id
-            )`)
-            .orderBy(asc(rawMessages.chatId))
-            .all();
-        return rows.map(toRawMessage);
+        type RawMessageDbRow = Omit<typeof rawMessages.$inferSelect, 'important'> & { important: number };
+        const rows = this.db.all<RawMessageDbRow>(sql`
+            SELECT rm.chat_id AS chatId,
+                   rm.id AS id,
+                   rm.userid AS userid,
+                   rm.user_nick AS userNick,
+                   rm.user_fullname AS userFullname,
+                   rm.user_hash AS userHash,
+                   rm.server_time AS serverTime,
+                   rm.sent_at AS sentAt,
+                   rm.important AS important,
+                   rm.text AS text,
+                   rm.photo_id AS photoId,
+                   rm.file_id AS fileId,
+                   rm.position AS position,
+                   rm.received_at AS receivedAt
+            FROM (
+                SELECT chat_id, max(id) AS id
+                FROM raw_messages
+                GROUP BY chat_id
+            ) latest
+            INNER JOIN chats ON chats.id = latest.chat_id
+            INNER JOIN raw_messages rm
+                ON rm.chat_id = latest.chat_id
+                AND rm.id = latest.id
+            ORDER BY latest.chat_id ASC
+        `);
+        return rows.map(row => toRawMessage({
+            ...row,
+            important: row.important === 1,
+        }));
     }
 
     async listPage(chatId: number, opts: { beforeId?: number; limit: number }) {
