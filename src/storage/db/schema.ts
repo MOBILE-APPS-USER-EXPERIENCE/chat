@@ -108,6 +108,7 @@ export const rawMessages = sqliteTable(
     photoId: text("photo_id"),
     fileId: text("file_id"),
     position: text("position"),
+    sentAt: integer("sent_at"),
     receivedAt: integer("received_at").notNull(),
   },
   (table) => [primaryKey({ columns: [table.chatId, table.id] })],

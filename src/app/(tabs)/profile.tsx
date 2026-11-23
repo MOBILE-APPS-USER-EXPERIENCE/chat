@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button, Text, YStack } from "tamagui";
 
 import Header from "@/components/header";
-import { Spacing } from "@/constants/layout";
+import { Spacing } from "@/config/layout";
 import { triggerPrimaryButtonHaptic } from "@/utils/primary-button-haptic";
 
 export default function ProfileScreen() {
@@ -50,9 +50,9 @@ export default function ProfileScreen() {
     const initials = username.match(/(?:^|[^\p{L}])(\p{L})/gu);
     return initials
       ? initials
-          .map((match) => match.replaceAll(/[^\p{L}]/gu, ""))
-          .join("")
-          .toUpperCase()
+        .map((match) => match.replaceAll(/[^\p{L}]/gu, ""))
+        .join("")
+        .toUpperCase()
       : "?";
   }
 

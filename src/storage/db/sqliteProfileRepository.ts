@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import type { ProfileRepository } from '../ports';
 import type { ProfileRow } from '../types';
@@ -12,6 +12,11 @@ import type { SqliteDb } from './types';
  */
 export class SqliteProfileRepository implements ProfileRepository {
     constructor(private readonly db: SqliteDb) { }
+
+    async list() {
+        const rows = this.db.select().from(profiles).orderBy(asc(profiles.userid)).all();
+        return rows.map(toProfileRow);
+    }
 
     async get(userid: string) {
         const row = this.db.select().from(profiles).where(eq(profiles.userid, userid)).get();

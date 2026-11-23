@@ -26,8 +26,18 @@ AI-assisted work included:
   independent server instances.
 - Developing message polling, local chat and message reads, and the initial
   chat screens.
-- Proposing an outbox and text composer for issue #38, including automatic
-  retry and tests. This work is still subject to integration and verification.
+- Implementing and integrating the issue-38 text outbox: enqueue,
+  pending/sending/failed states, linear backoff, stuck-send recovery, discard
+  and immediate flush. Automated outbox tests cover state transitions and
+  retry behavior; the team still owns manual offline/device verification.
+- Implementing storage fallback decisions and server URL/time handling:
+  step 8.x covers per-account SQLite, web memory fallback and cache reset;
+  step 9a covers server validation and explicit custom-server selection.
+- Implementing step 9b/9c chat actions and invitations: group/direct creation,
+  inviting, public browsing/joining and invite accept/reject; chat snapshots
+  and invitations are read from local storage, while actions remain network calls.
+- Implementing time display: server wall-clock `time` is converted to epoch
+  `sentAt` through a per-server zone map, with a local 12/24-hour clock formatter.
 
 The team also made changes independently, including UI improvements, temporary
 server selection and web hosting configuration. AI output was reviewed and
@@ -43,9 +53,32 @@ iterated on with human feedback; it was not accepted automatically.
   database is not encrypted.
 - The server does not return a message ID when sending or support a client
   idempotency key. Retrying an uncertain send can therefore create duplicates.
+- The outbox sends rows per chat in enqueue order, blocking later rows in that
+  chat until earlier rows succeed or become retryable; duplicate risk is unchanged.
+- Sending is claimed atomically: `markSending` accepts both pending and failed rows,
+  returns whether it transitioned a row, and prevents discarded or already-sending
+  rows from being posted.
+- A timeout on `postmessage` can abort a request after the server has already stored it, so an automatic retry may create a duplicate; the default timeout is slightly larger for binary requests but the accepted duplicate risk remains unchanged.
 - Public-chat browsing and joining is a separate planned feature that can later
   be reused for laboratory groups; it does not itself implement their
   course-to-subgroup relationship.
+- Invitations and public-chat browsing are local reads of the account's chat
+  snapshot. The selectors only show invited rows or unjoined public,
+  non-direct chats, and accept, reject and join remain network actions in
+  `ChatActions`; each action refreshes the local chat snapshot afterward.
+- Chat creation and invitations use `ChatActions` on the messaging runtime.
+  `refreshChats()` waits for an active sync cycle and then refreshes only the
+  chat snapshot; refresh failures do not undo a successful server creation.
+  Direct-chat names are display names only: the server receives the combined
+  name, while the local UI resolves the other participant from chat members and
+  profiles and keeps the chat name unchanged.
+- Sent times convert server wall-clock `time` to epoch `sentAt` using a per-server
+  zone map, while server id remains the only basis for message order.
+- Chat-list previews read one highest-id message per chat with a repository-level
+  query, while storage events reload previews when any message or chat snapshot changes.
+- A wrong zone shifts displayed clocks by a constant but does not change order or grouping.
+- The local cache resets once for a chat whose newest stored message has parseable
+  `serverTime` and missing `sentAt`; unparseable time does not cause reset loops.
 
 ## Verification and responsibility
 

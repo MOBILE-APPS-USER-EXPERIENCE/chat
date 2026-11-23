@@ -45,6 +45,8 @@ export class FakeSyncApi implements SyncApi {
   onCall: ((call: ApiCall) => void) | null = null;
   private readonly failures: Failure[] = [];
   private gate: Promise<void> | null = null;
+  private chatsGate: Promise<void> | null = null;
+  private postGate: Promise<void> | null = null;
 
   /** Makes matching requests fail until the end of the test. */
   failWith(
@@ -67,6 +69,29 @@ export class FakeSyncApi implements SyncApi {
     };
   }
 
+  holdChats(): () => void {
+    let open!: () => void;
+    this.chatsGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return () => {
+      this.chatsGate = null;
+      open();
+    };
+  }
+
+  /** Holds postMessage calls until the returned function is called. */
+  holdPost(): () => void {
+    let open!: () => void;
+    this.postGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return () => {
+      this.postGate = null;
+      open();
+    };
+  }
+
   callsOf(method: ApiMethod): ApiCall[] {
     return this.calls.filter((call) => call.method === method);
   }
@@ -77,10 +102,13 @@ export class FakeSyncApi implements SyncApi {
 
   async getChats(): Promise<ChatSnapshot[]> {
     await this.enter({ method: "getChats" });
-    return this.chats.map((chat) => ({
+    const snapshot = this.chats.map((chat) => ({
       ...chat,
       members: chat.members.map((member) => ({ ...member })),
     }));
+    const chatsGate = this.chatsGate;
+    if (chatsGate !== null) await chatsGate;
+    return snapshot;
   }
 
   async getProfiles(): Promise<ProfileInput[]> {
@@ -106,6 +134,8 @@ export class FakeSyncApi implements SyncApi {
     important: boolean,
   ): Promise<void> {
     await this.enter({ method: "postMessage", chatId });
+    const gate = this.postGate;
+    if (gate !== null) await gate;
     this.postMessageCalls.push({ chatId, text, important });
   }
 
@@ -131,6 +161,7 @@ export const msg = (id: number, text = `m${id}`): RawMessageInput => ({
   userFullname: null,
   userHash: null,
   serverTime: "2026-11-17_10-00-00",
+  sentAt: Date.UTC(2026, 10, 17, 9, 0, 0),
   important: false,
   text,
   photoId: null,

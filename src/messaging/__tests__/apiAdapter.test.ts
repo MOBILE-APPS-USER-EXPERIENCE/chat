@@ -1,23 +1,35 @@
 /** @jest-environment node */
 
 import { ApiError, NetworkError } from "../../api/apiClient";
-import { getChats } from "../../api/chatService";
+import { createChat, getChats, joinChat } from "../../api/chatService";
+import { invite, rejectInvite } from "../../api/inviteService";
 import { getMessages, postMessage } from "../../api/messageService";
 import type { Chat, Message, User } from "../../api/types";
 import { getProfiles } from "../../api/userService";
-import { createSyncApi, isNetworkError } from "../apiAdapter";
+import {
+  createChatActionsApi,
+  createSyncApi,
+  isNetworkError,
+} from "../apiAdapter";
 import {
   ChatNotFoundError,
   InvalidServerDataError,
   InvalidTokenError,
+  ChatActionRejectedError,
 } from "../errors";
 import type { SyncApi } from "../ports";
 
 jest.mock("../../api/chatService");
 jest.mock("../../api/messageService");
 jest.mock("../../api/userService");
+jest.mock("../../api/inviteService");
+jest.mock("../../api/chatService");
 
 const chatsMock = jest.mocked(getChats);
+const createChatMock = jest.mocked(createChat);
+const inviteMock = jest.mocked(invite);
+const joinChatMock = jest.mocked(joinChat);
+const rejectInviteMock = jest.mocked(rejectInvite);
 const profilesMock = jest.mocked(getProfiles);
 const messagesMock = jest.mocked(getMessages);
 const postMessageMock = jest.mocked(postMessage);
@@ -59,6 +71,10 @@ beforeEach(() => {
   profilesMock.mockResolvedValue([user]);
   messagesMock.mockResolvedValue([message]);
   postMessageMock.mockResolvedValue(undefined);
+  createChatMock.mockResolvedValue(42);
+  inviteMock.mockResolvedValue(undefined);
+  joinChatMock.mockResolvedValue(undefined);
+  rejectInviteMock.mockResolvedValue(undefined);
 });
 
 type Method = "getChats" | "getProfiles" | "getMessages";
@@ -248,6 +264,56 @@ describe("createSyncApi", () => {
       await expect(createSyncApi().postMessage(3, "x", false)).rejects.toBe(
         other,
       );
+    });
+  });
+
+  describe("createChatActionsApi", () => {
+    it("passes chat creation fields and maps 456", async () => {
+      const api = createChatActionsApi();
+      await api.createChat("Test", false, true);
+      expect(createChatMock).toHaveBeenCalledWith({
+        chatname: "Test",
+        ispublic: false,
+        directchat: true,
+      });
+
+      createChatMock.mockRejectedValue(new ApiError(456, "secret"));
+      await expect(api.createChat("Test", false, false)).rejects.toBeInstanceOf(
+        InvalidTokenError,
+      );
+    });
+
+    it('passes useAdminKey false for invite', async () => {
+      await createChatActionsApi().invite(7, "AbCd1234");
+      expect(inviteMock).toHaveBeenCalledWith(7, "AbCd1234", false);
+    });
+
+    it("maps join and reject 456 to InvalidTokenError", async () => {
+      joinChatMock.mockRejectedValue(new ApiError(456, "secret"));
+      await expect(createChatActionsApi().joinChat(7)).rejects.toBeInstanceOf(
+        InvalidTokenError,
+      );
+      rejectInviteMock.mockRejectedValue(new ApiError(456, "secret"));
+      await expect(createChatActionsApi().rejectInvite(7)).rejects.toBeInstanceOf(
+        InvalidTokenError,
+      );
+    });
+
+    it("maps join and reject 458 to ChatActionRejectedError", async () => {
+      joinChatMock.mockRejectedValue(new ApiError(458, "x"));
+      await expect(createChatActionsApi().joinChat(7)).rejects.toBeInstanceOf(
+        ChatActionRejectedError,
+      );
+      rejectInviteMock.mockRejectedValue(new ApiError(458, "x"));
+      await expect(createChatActionsApi().rejectInvite(7)).rejects.toBeInstanceOf(
+        ChatActionRejectedError,
+      );
+    });
+
+    it("passes join and reject network errors through unchanged", async () => {
+      const network = new NetworkError();
+      joinChatMock.mockRejectedValue(network);
+      await expect(createChatActionsApi().joinChat(7)).rejects.toBe(network);
     });
   });
 });

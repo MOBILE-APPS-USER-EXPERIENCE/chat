@@ -478,7 +478,70 @@ describe.each(backends)('SyncService (%s storage)', (_name, makeStorage) => {
         expect(h.api.calls).toHaveLength(requests);
     });
 
-    it('is idempotent: a second cycle against an unchanged server changes only syncedAt and lastPolledAt', async () => {
+    it('identical snapshot -> applySnapshot not called a second time and result is unchanged', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1)];
+        const applySpy = jest.spyOn(h.storage.chats, 'applySnapshot');
+
+        expect(details(await h.service.runCycle()).chats).toBe('updated');
+        applySpy.mockClear();
+        expect(details(await h.service.runCycle()).chats).toBe('unchanged');
+        expect(applySpy).not.toHaveBeenCalled();
+    });
+
+    it('changed members -> snapshot is applied', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1, { members: [{ userid: 'abcdit01', role: 'owner' }] })];
+        await h.service.runCycle();
+        h.api.chats = [snap(1, { members: [
+            { userid: 'abcdit01', role: 'owner' },
+            { userid: 'efghit02', role: 'invited' },
+        ] })];
+        const applySpy = jest.spyOn(h.storage.chats, 'applySnapshot');
+
+        expect(details(await h.service.runCycle()).chats).toBe('updated');
+        expect(applySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failed apply is not remembered', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1)];
+        const original = h.storage.chats.applySnapshot.bind(h.storage.chats);
+        const applySpy = jest.spyOn(h.storage.chats, 'applySnapshot')
+            .mockRejectedValueOnce(new Error('apply failed'))
+            .mockImplementation(original);
+
+        expect(details(await h.service.runCycle()).chats).toBe('failed');
+        expect(details(await h.service.runCycle()).chats).toBe('updated');
+        expect(applySpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('a new SyncService instance applies the identical snapshot once', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1)];
+        const applySpy = jest.spyOn(h.storage.chats, 'applySnapshot');
+
+        expect(details(await h.service.runCycle()).chats).toBe('updated');
+        const next = new SyncService({
+            api: h.api,
+            storage: h.storage,
+            now: () => h.state.time,
+            isCurrent: () => h.state.current,
+            isNetworkError: isFakeNetworkError,
+        });
+        applySpy.mockClear();
+        expect(details(await next.runCycle()).chats).toBe('updated');
+        expect(applySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('refreshChats after an equal cycle returns unchanged', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1)];
+        await h.service.runCycle();
+        expect(await h.service.refreshChats()).toBe('unchanged');
+    });
+
+    it('is idempotent: a second cycle against an unchanged server leaves syncedAt unchanged', async () => {
         const h = await harness(makeStorage, { profilesIntervalMs: 0, otherChatsIntervalMs: 0 });
         h.api.chats = [
             snap(0, { visibility: 'public', ownerUserid: null }),
@@ -495,9 +558,45 @@ describe.each(backends)('SyncService (%s storage)', (_name, makeStorage) => {
         h.state.time += 5_000;
         const second = details(await h.service.runCycle({ openChatId: 1 }));
 
+        expect(second.chats).toBe('unchanged');
         expect(second.polled.every(entry => entry.result.status === 'ok' && entry.result.inserted === 0)).toBe(true);
         expect(await capture(h.storage)).toEqual(before);
-        expect((await h.storage.chats.get(1))?.syncedAt).toBe((syncedBefore ?? 0) + 5_000);
+        expect((await h.storage.chats.get(1))?.syncedAt).toBe(syncedBefore);
         expect((await h.storage.chats.get(1))?.lastPolledAt).toBe(6_000);
+    });
+
+    it('refreshChats waits for a held cycle then fetches again instead of using a stale snapshot', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1, { name: 'Stale' })];
+        const release = h.api.holdChats();
+        const cycle = h.service.runCycle();
+        await flush();
+
+        h.api.chats = [snap(1, { name: 'Newer' })];
+        const refresh = h.service.refreshChats();
+        await flush();
+        expect(h.api.callsOf('getChats')).toHaveLength(1);
+
+        release();
+        await cycle;
+        expect(await refresh).toBe('updated');
+        expect((await h.storage.chats.get(1))?.name).toBe('Newer');
+        expect(h.api.callsOf('getChats')).toHaveLength(2);
+    });
+
+    it('refreshChats 456 calls onInvalidToken once', async () => {
+        const h = await harness(makeStorage);
+        h.api.failWith('getChats', new InvalidTokenError());
+        expect(await h.service.refreshChats()).toBe('invalid_token');
+        expect(h.onInvalidToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('refreshChats stale account does not write', async () => {
+        const h = await harness(makeStorage);
+        h.api.chats = [snap(1)];
+        h.api.onCall = () => { h.state.current = false; };
+        expect(await h.service.refreshChats()).toBe('aborted');
+        expect(await h.storage.chats.list()).toEqual([]);
+        expect(h.onInvalidToken).not.toHaveBeenCalled();
     });
 });

@@ -17,7 +17,7 @@ export function chatRepositoryContract(name: string, make: () => Promise<Account
             await storage.chats.applySnapshot([snapshot(2), snapshot(1)], 100);
             await storage.messages.appendBatch(1, [{
                 id: 8, userid: 'u', userNick: null, userFullname: null, userHash: null,
-                serverTime: null, important: false, text: 'old', photoId: null, fileId: null, position: null,
+                sentAt: null, serverTime: null, important: false, text: 'old', photoId: null, fileId: null, position: null,
             }], 110);
             await storage.chats.applySnapshot([{ ...snapshot(1), name: 'Updated', members: [{ userid: 'new', role: 'owner' }] }], 200);
             const chat = await storage.chats.get(1);
@@ -38,8 +38,8 @@ export function chatRepositoryContract(name: string, make: () => Promise<Account
 
         it('purges a chat and cascades members and messages without affecting others', async () => {
             await storage.chats.applySnapshot([snapshot(1), snapshot(2)], 100);
-            await storage.messages.appendBatch(1, [{ id: 1, userid: 'u', userNick: null, userFullname: null, userHash: null, serverTime: null, important: false, text: null, photoId: null, fileId: null, position: null }], 101);
-            await storage.messages.appendBatch(2, [{ id: 2, userid: 'u', userNick: null, userFullname: null, userHash: null, serverTime: null, important: false, text: null, photoId: null, fileId: null, position: null }], 101);
+            await storage.messages.appendBatch(1, [{ id: 1, userid: 'u', userNick: null, userFullname: null, userHash: null, serverTime: null, sentAt: null, important: false, text: null, photoId: null, fileId: null, position: null }], 101);
+            await storage.messages.appendBatch(2, [{ id: 2, userid: 'u', userNick: null, userFullname: null, userHash: null, serverTime: null, sentAt: null, important: false, text: null, photoId: null, fileId: null, position: null }], 101);
             await storage.chats.purge(1);
             await storage.chats.purge(99);
             expect(await storage.chats.get(1)).toBeNull();
@@ -100,7 +100,7 @@ export function chatRepositoryContract(name: string, make: () => Promise<Account
             await storage.chats.applySnapshot([snapshot(1)], 100);
             await storage.messages.appendBatch(1, [{
                 id: 1, userid: 'u', userNick: null, userFullname: null, userHash: null,
-                serverTime: null, important: false, text: 'kept', photoId: null, fileId: null, position: null,
+                sentAt: null, serverTime: null, important: false, text: 'kept', photoId: null, fileId: null, position: null,
             }], 110);
             await storage.chats.applySnapshot([{ ...snapshot(1), name: 'Re-applied' }], 200);
             expect((await storage.messages.get(1, 1))?.text).toBe('kept');

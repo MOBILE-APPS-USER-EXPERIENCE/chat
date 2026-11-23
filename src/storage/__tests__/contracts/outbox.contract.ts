@@ -41,6 +41,16 @@ export function outboxRepositoryContract(
             ownerUserid: "owner",
             members: [],
           },
+          {
+            id: 3,
+            name: "Chat 3",
+            visibility: "private",
+            directchat: false,
+            role: "member",
+            joined: true,
+            ownerUserid: "owner",
+            members: [],
+          },
         ],
         1000,
       );
@@ -82,6 +92,43 @@ export function outboxRepositoryContract(
       expect(await storage.outbox.listByChat(3)).toEqual([]);
     });
 
+    it("uses insertion order when createdAt is identical", async () => {
+      await storage.outbox.enqueue(input(1, "first"), "cid-same-1", 1000);
+      await storage.outbox.enqueue(input(1, "second"), "cid-same-2", 1000);
+      expect(
+        (await storage.outbox.listByChat(1)).map((r) => r.clientMessageId),
+      ).toEqual(["cid-same-1", "cid-same-2"]);
+      expect(
+        (await storage.outbox.listDue(1000)).map((r) => r.clientMessageId),
+      ).toEqual(["cid-same-1", "cid-same-2"]);
+    });
+
+    it("discards a non-sending row but not a sending row", async () => {
+      await storage.outbox.enqueue(input(1, "failed"), "cid-failed", 1000);
+      await storage.outbox.markFailed("cid-failed", "offline", 2000);
+      await storage.outbox.enqueue(input(1, "sending"), "cid-sending", 1100);
+      await storage.outbox.markSending("cid-sending");
+
+      expect(await storage.outbox.discard("cid-failed")).toMatchObject({
+        clientMessageId: "cid-failed",
+      });
+      expect(await storage.outbox.discard("cid-sending")).toBeNull();
+      expect(await storage.outbox.discard("unknown-id")).toBeNull();
+    });
+
+    it("lists chat ids blocked by sending or future-failed rows", async () => {
+      await storage.outbox.enqueue(input(1, "sending"), "cid-sending", 1000);
+      await storage.outbox.markSending("cid-sending");
+      await storage.outbox.enqueue(input(2, "future"), "cid-future", 1000);
+      await storage.outbox.markFailed("cid-future", "offline", 2000);
+      await storage.outbox.enqueue(input(1, "due"), "cid-due", 900);
+      await storage.outbox.enqueue(input(3, "untouched"), "cid-untouched", 900);
+
+      expect(new Set(await storage.outbox.listBlockedChatIds(1500))).toEqual(
+        new Set([1, 2]),
+      );
+    });
+
     it("listDue returns pending and due failed rows oldest first, excludes sending and not-yet-due failed rows", async () => {
       await storage.outbox.enqueue(
         input(1, "pending-row"),
@@ -110,19 +157,20 @@ export function outboxRepositoryContract(
       ]);
     });
 
-    it("markSending transitions pending to sending, and is a no-op for non-pending or unknown rows", async () => {
+    it("markSending transitions pending or failed to sending and reports the transition", async () => {
       await storage.outbox.enqueue(input(1), "cid-1", 1000);
-      await storage.outbox.markSending("cid-1");
+      expect(await storage.outbox.markSending("cid-1")).toBe(true);
       expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
 
-      await expect(
-        storage.outbox.markSending("cid-1"),
-      ).resolves.toBeUndefined();
+      await expect(storage.outbox.markSending("cid-1")).resolves.toBe(false);
       expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
 
-      await expect(
-        storage.outbox.markSending("unknown-id"),
-      ).resolves.toBeUndefined();
+      await storage.outbox.enqueue(input(1), "cid-failed", 1000);
+      await storage.outbox.markFailed("cid-failed", "offline", 2000);
+      expect(await storage.outbox.markSending("cid-failed")).toBe(true);
+      expect((await storage.outbox.listByChat(1))[1]?.status).toBe("sending");
+
+      await expect(storage.outbox.markSending("unknown-id")).resolves.toBe(false);
     });
 
     it("markFailed sets status, increments attempts, sets lastError/nextRetryAt, and is a no-op for unknown rows", async () => {

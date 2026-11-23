@@ -10,6 +10,14 @@ export function profileRepositoryContract(name: string, make: () => Promise<Acco
             storage = await make();
         });
 
+        it('lists profiles ordered by userid and returns copies', async () => {
+            await storage.profiles.applyDirectory([profile('b', 'hb'), profile('a', 'ha')], 100);
+            const listed = await storage.profiles.list();
+            expect(listed.map((row) => row.userid)).toEqual(['a', 'b']);
+            listed[0].nickname = 'mutated';
+            expect((await storage.profiles.get('a'))?.nickname).toBeNull();
+        });
+
         it('upserts present profiles, marks omitted profiles missing, and never deletes', async () => {
             await storage.profiles.applyDirectory([profile('a', 'ha'), profile('b', 'hb')], 100);
             await storage.profiles.applyDirectory([profile('a', 'ha2')], 200);

@@ -115,6 +115,7 @@ Table raw_messages {
   photo_id text
   file_id text
   position text
+  sent_at integer [note: 'epoch ms derived from server_time with the server zone when stored; null if unparseable']
   received_at integer [not null]
 
   indexes {

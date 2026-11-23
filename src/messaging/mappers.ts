@@ -1,6 +1,7 @@
 import type { ChatRole, ChatSnapshot, MemberRole, RawMessageInput } from '../storage/types';
 import { InvalidServerDataError } from './errors';
 import type { ProfileInput } from './ports';
+import { serverTimeToEpoch, type ServerTimeZone } from './serverTime';
 
 /**
  * Pure mappers from raw server JSON to domain input types. Input is `unknown` on purpose: the
@@ -140,17 +141,22 @@ export function toProfileInputs(users: unknown): { profiles: ProfileInput[]; dro
     return { profiles, dropped };
 }
 
-export function toRawMessageInput(message: unknown): RawMessageInput {
+export function toRawMessageInput(
+    message: unknown,
+    timeZone: ServerTimeZone = 'Europe/Berlin',
+): RawMessageInput {
     const raw = requireWire(message, 'message');
     const id = raw.id;
     if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) throw invalid('message.id');
+    const serverTime = optionalString(raw, 'time', 'message');
     return {
         id,
         userid: requireUserid(raw, 'message'),
         userNick: optionalString(raw, 'usernick', 'message'),
         userFullname: optionalString(raw, 'userfullname', 'message'),
         userHash: optionalString(raw, 'userhash', 'message'),
-        serverTime: optionalString(raw, 'time', 'message'),
+        serverTime,
+        sentAt: serverTimeToEpoch(serverTime, timeZone),
         important: toStrictBoolean(raw.important),
         // The text is stored exactly as received: no entity decoding, no trimming.
         text: optionalString(raw, 'text', 'message'),
@@ -161,8 +167,11 @@ export function toRawMessageInput(message: unknown): RawMessageInput {
 }
 
 /** Ascending by server id. The whole payload is rejected when one message is invalid. */
-export function toRawMessageInputs(messages: unknown): RawMessageInput[] {
+export function toRawMessageInputs(
+    messages: unknown,
+    timeZone: ServerTimeZone = 'Europe/Berlin',
+): RawMessageInput[] {
     return requireArray(messages, 'messages')
-        .map(message => toRawMessageInput(message))
+        .map(message => toRawMessageInput(message, timeZone))
         .sort((a, b) => a.id - b.id);
 }

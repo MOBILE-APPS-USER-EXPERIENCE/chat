@@ -1,21 +1,24 @@
 import { ApiError, NetworkError } from "../api/apiClient";
-import { getChats } from "../api/chatService";
+import { createChat, getChats, joinChat } from "../api/chatService";
+import { invite, rejectInvite } from "../api/inviteService";
 import {
   postMessage as apiPostMessage,
   getMessages,
 } from "../api/messageService";
 import { getProfiles } from "../api/userService";
-import { ChatNotFoundError, InvalidTokenError } from "./errors";
+import { ChatActionRejectedError, ChatNotFoundError, InvalidTokenError } from "./errors";
 import {
   toChatSnapshots,
   toProfileInputs,
   toRawMessageInputs,
 } from "./mappers";
-import type { SyncApi } from "./ports";
+import type { ChatActionsApi, SyncApi } from "./ports";
+import type { ServerTimeZone } from "./serverTime";
 
 /** The only file in `src/messaging` that imports `src/api`. */
 
 export type SyncApiOptions = {
+  timeZone?: ServerTimeZone;
   /** Called with the number of invalid profile entries that were dropped from one response. */
   onProfilesDropped?: (count: number) => void;
 };
@@ -41,7 +44,10 @@ async function translated<T>(
   }
 }
 
-export function createSyncApi(options: SyncApiOptions = {}): SyncApi {
+export function createSyncApi(
+  options: SyncApiOptions = { timeZone: "UTC" },
+): SyncApi {
+  const timeZone = options.timeZone ?? "UTC";
   // `useAdminKey` is always false: sync must never fetch admin-visible data.
   return {
     async getChats() {
@@ -58,13 +64,52 @@ export function createSyncApi(options: SyncApiOptions = {}): SyncApi {
       const messages = await translated(true, () =>
         getMessages({ fromid: fromId, chatid: chatId, useAdminKey: false }),
       );
-      return toRawMessageInputs(messages);
+      return toRawMessageInputs(messages, timeZone);
     },
     async postMessage(chatId, text, important) {
       // `postmessage` is chat-scoped: an invalid/non-member chatid answers 458 (docs/openapi.yaml).
       await translated(true, () =>
         apiPostMessage({ chatid: chatId, text, important }),
       );
+    },
+  };
+}
+
+export function createChatActionsApi(): ChatActionsApi {
+  return {
+    async createChat(name, isPublic, directChat) {
+      return translated(false, () =>
+        createChat({
+          chatname: name,
+          ispublic: isPublic,
+          directchat: directChat,
+        }),
+      );
+    },
+    async invite(chatId, hash) {
+      await translated(false, () => invite(chatId, hash, false));
+    },
+    async joinChat(chatId) {
+      try {
+        await joinChat(chatId);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.code === 456) throw new InvalidTokenError();
+          if (error.code === 458) throw new ChatActionRejectedError();
+        }
+        throw error;
+      }
+    },
+    async rejectInvite(chatId) {
+      try {
+        await rejectInvite(chatId);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.code === 456) throw new InvalidTokenError();
+          if (error.code === 458) throw new ChatActionRejectedError();
+        }
+        throw error;
+      }
     },
   };
 }

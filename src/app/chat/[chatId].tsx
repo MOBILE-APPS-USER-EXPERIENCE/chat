@@ -1,8 +1,9 @@
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { memo, useCallback, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform } from "react-native";
-import { Button, Spinner, Text, TextArea, XStack, YStack } from "tamagui";
+import { FlatList, KeyboardAvoidingView } from "react-native";
+import { Button, isWeb, Spinner, Text, TextArea, XStack, YStack } from "tamagui";
 
+import ConfirmDialog from "@/components/confirm-dialog";
 import Header from "@/components/header";
 import {
   Check,
@@ -10,25 +11,32 @@ import {
   CloudUpload,
   OctagonX,
   SendHorizontal,
+  UserPlus,
 } from "@/components/icons";
-import { Spacing } from "@/constants/layout";
+import { Spacing } from "@/config/layout";
 import { useChat } from "@/hooks/use-chat";
+import { useChatMembers } from "@/hooks/use-chat-members";
 import { useMessages } from "@/hooks/use-messages";
 import { useOutbox } from "@/hooks/use-outbox";
+import { useProfiles } from "@/hooks/use-profiles";
 import { useSession } from "@/session/useSession";
 import type { OutboxRow, RawMessage } from "@/storage/types";
-import { formatTime } from "@/utils/format-date-times";
+import { chatDisplayName } from "@/utils/chat-actions";
+import { formatClock } from "@/utils/format-date-times";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const GROUP_GAP_MS = 5 * 60 * 1000; // 5 minutes
 
 function getAuthorId(entry: ListEntry | undefined, currentUserId: string) {
-  if (!entry) return undefined;
+  if (!entry || entry.kind === "day") return undefined;
   return entry.kind === "message" ? entry.message.userid : currentUserId;
 }
 
 function getTimestamp(entry: ListEntry | undefined): number | undefined {
-  if (!entry) return undefined;
-  return entry.kind === "message" ? entry.message.receivedAt : Date.now();
+  if (!entry || entry.kind === "day") return undefined;
+  return entry.kind === "message"
+    ? entry.message.sentAt ?? entry.message.receivedAt
+    : entry.row.createdAt;
 }
 
 function Bubble({
@@ -104,7 +112,7 @@ const MessageRow = memo(function MessageRow({
         mr={-Spacing.two}
       >
         <Text color="textSecondary" fontSize={11} self="flex-end">
-          {formatTime(message.receivedAt)}
+          {formatClock(message.sentAt ?? message.receivedAt)}
         </Text>
         {isOwn && <Check color="textSecondary" size={12} />}
       </XStack>
@@ -122,7 +130,13 @@ function PendingRow({
   row,
   isGroupStart,
   isNewest,
-}: Readonly<{ row: OutboxRow; isGroupStart: boolean; isNewest: boolean }>) {
+  onDiscard,
+}: Readonly<{
+  row: OutboxRow;
+  isGroupStart: boolean;
+  isNewest: boolean;
+  onDiscard: (row: OutboxRow) => void;
+}>) {
   return (
     <Bubble
       isOwn
@@ -148,36 +162,77 @@ function PendingRow({
           </Text>
         )}
         <Text color="textSecondary" fontSize={11} self="flex-end">
-          {formatTime(row.createdAt)}
+          {formatClock(row.createdAt)}
         </Text>
-
+        {row.status === "pending" && (
+          <ClockFading color="textSecondary" size={12} aria-label="Wird gesendet" />
+        )}
         {row.status === "sending" && (
-          <CloudUpload color="textSecondary" size={12} />
+          <CloudUpload color="textSecondary" size={12} aria-label="Wird gerade gesendet" />
         )}
         {row.status === "failed" && row.lastError !== "offline" ? (
-          <OctagonX color="textSecondary" size={12} />
+          <OctagonX color="textSecondary" size={12} aria-label="Senden fehlgeschlagen" />
         ) : (
-          <ClockFading color="textSecondary" size={12} />
+          row.status === "failed" && (
+            <ClockFading color="textSecondary" size={12} aria-label="Keine Verbindung" />
+          )
         )}
       </XStack>
+      {row.status === "failed" && (
+        <Button
+          py={Spacing.one}
+          px={Spacing.two}
+          self="flex-end"
+          backgroundColor="error"
+          color="errorText"
+          onPress={() => onDiscard(row)}
+        >
+          Verwerfen
+        </Button>
+      )}
     </Bubble>
   );
 }
 
+function SystemMessageRow({ text }: { text: string }) {
+  return (
+    <YStack w="100%" px={Spacing.three} my={Spacing.two} items="center">
+      <YStack
+        maxW="90%"
+        gap={Spacing.one}
+        rounded={Spacing.two}
+        px={Spacing.three}
+        py={Spacing.two}
+        backgroundColor="backgroundSecondary"
+        color="textSecondary"
+      >
+        <Text fontSize={12}>
+          {text}
+        </Text>
+      </YStack>
+    </YStack>
+  )
+}
+
 type ListEntry =
   | { kind: "message"; message: RawMessage }
-  | { kind: "pending"; row: OutboxRow };
+  | { kind: "pending"; row: OutboxRow }
+  | { kind: "day"; text: string };
 
 export default function ChatScreen() {
   const { chatId: chatIdParam } = useLocalSearchParams<{ chatId: string }>();
   const chatId = Number(chatIdParam);
   const { chat } = useChat(chatId);
   const { messages, loading, loadOlder } = useMessages(chatId);
-  const { pending, sending, send } = useOutbox(chatId);
+  const { pending, sending, send, discard } = useOutbox(chatId);
   const [text, setText] = useState("");
   const [error, setError] = useState<string>();
   const [inputHeight, setInputHeight] = useState(44);
+  const [discardRow, setDiscardRow] = useState<OutboxRow | null>(null);
   const session = useSession();
+  const { profiles } = useProfiles();
+  const { members } = useChatMembers(chatId);
+  const insets = useSafeAreaInsets();
 
   const currentUserId =
     session?.status === "signed_in" ? session.account.userid : "";
@@ -186,15 +241,41 @@ export default function ChatScreen() {
   // repository's contract). Pending rows are always newer than any confirmed message, so they
   // go first in the combined, newest-first array — reversed, so the most recently typed
   // message renders closest to the input box at the bottom of the inverted list.
-  const entries = useMemo<ListEntry[]>(
-    () => [
+  const entries = useMemo<ListEntry[]>(() => {
+    const combined: ListEntry[] = [
       ...[...pending]
         .reverse()
         .map((row): ListEntry => ({ kind: "pending", row })),
       ...messages.map((message): ListEntry => ({ kind: "message", message })),
-    ],
-    [messages, pending],
-  );
+    ];
+
+    const withSeparators: ListEntry[] = [];
+
+    combined.forEach((entry, index) => {
+      const time = getTimestamp(entry);
+      const olderEntry = combined[index + 1];
+      const olderTime = getTimestamp(olderEntry);
+
+      // Push the entry first, so that the day separator appears *after* the last message of the
+      // previous day, and before the first message of the new day. (list is inverted, so the
+      // "first" message is the newest one, at the bottom of the list.)
+      withSeparators.push(entry);
+
+      if (
+        time !== undefined &&
+        (olderTime === undefined ||
+          new Date(time).toDateString() !== new Date(olderTime).toDateString())
+      ) {
+        withSeparators.push({
+          kind: "day",
+          text: new Date(time).toLocaleDateString(),
+        });
+      }
+
+    });
+
+    return withSeparators;
+  }, [messages, pending]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: ListEntry; index: number }) => {
@@ -202,6 +283,10 @@ export default function ChatScreen() {
       const previousAuthor = getAuthorId(prev, currentUserId);
       const prevTime = getTimestamp(prev);
       const time = getTimestamp(item);
+
+      if (item.kind === "day") {
+        return <SystemMessageRow text={item.text} />;
+      }
 
       const sameAuthor =
         (item.kind === "pending" ? currentUserId : item.message.userid) ===
@@ -220,6 +305,7 @@ export default function ChatScreen() {
             row={item.row}
             isGroupStart={isGroupStart}
             isNewest={isNewest}
+            onDiscard={setDiscardRow}
           />
         );
 
@@ -236,6 +322,15 @@ export default function ChatScreen() {
   );
 
   const canSend = text.trim().length > 0 && !sending;
+  const displayName =
+    chat === null
+      ? "…"
+      : chatDisplayName({
+        chat,
+        members,
+        profiles,
+        selfUserid: currentUserId,
+      });
 
   async function handleSend() {
     const toSend = text;
@@ -252,12 +347,51 @@ export default function ChatScreen() {
     }
   }
 
+  async function handleDiscard() {
+    if (discardRow === null) return;
+    const clientMessageId = discardRow.clientMessageId;
+    setDiscardRow(null);
+    setError(undefined);
+    try {
+      await discard(clientMessageId);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Nachricht konnte nicht verworfen werden.",
+      );
+    }
+  }
+
   return (
-    <YStack flex={1} backgroundColor="background">
+    <YStack flex={1} backgroundColor="background"
+      pb={insets.bottom}>
       <Header
-        title={chat?.name ?? "…"}
-        avatar={{ label: "Avatar", placeholder: "A" }}
+        title={displayName}
+        avatar={{
+          label: `Avatar für ${displayName}`,
+          placeholder: displayName[0]?.toUpperCase() ?? "A",
+        }}
         showBackButton={true}
+        action={
+          chat !== null &&
+            chat.role === "owner" &&
+            !chat.directchat &&
+            chat.id !== 0 ? (
+            <Button
+              variant="quiet"
+              aria-label="Person einladen"
+              onPress={() =>
+                router.push({
+                  pathname: "/invite/[chatId]",
+                  params: { chatId: String(chat.id) },
+                })
+              }
+            >
+              <UserPlus color="text" />
+            </Button>
+          ) : undefined
+        }
       />
       {loading ? (
         <YStack flex={1} items="center" justify="center">
@@ -267,9 +401,11 @@ export default function ChatScreen() {
         <FlatList
           data={entries}
           keyExtractor={(entry) =>
-            entry.kind === "message"
-              ? `m-${entry.message.id}`
-              : `p-${entry.row.clientMessageId}`
+            entry.kind === "day"
+              ? `day-${entry.text}`
+              : entry.kind === "message"
+                ? `m-${entry.message.id}`
+                : `p-${entry.row.clientMessageId}`
           }
           renderItem={renderItem}
           inverted
@@ -286,9 +422,7 @@ export default function ChatScreen() {
         <YStack
           gap={Spacing.one}
           px={Spacing.three}
-          py={Spacing.two}
-          borderTopWidth={1}
-          borderColor="backgroundSelected"
+          py={Spacing.three}
         >
           <XStack gap={Spacing.two} items="flex-end">
             <TextArea
@@ -298,29 +432,40 @@ export default function ChatScreen() {
               placeholder="Nachricht…"
               borderColor="backgroundSelected"
               color="text"
+              backgroundColor="backgroundElement"
+              placeholderTextColor="textSecondary"
               h={inputHeight}
-              minH={44}
-              maxH={120}
+              minH={Spacing.inputHeight}
+              maxH={Spacing.maxNewMessageHeight}
               px={Spacing.three}
               py={Spacing.two}
-              textAlignVertical="top"
+              textAlignVertical="center"
               onKeyDown={(e) => {
-                const { key, shiftKey } = e.nativeEvent as {
+                const { key, shiftKey, isComposing } = e.nativeEvent as {
                   key: string;
                   shiftKey?: boolean;
+                  isComposing?: boolean;
                 };
-                if (Platform.OS === "web" && key === "Enter" && !shiftKey) {
+                if (isComposing) return;
+                if (isWeb && key === "Enter" && !shiftKey) {
                   if ("preventDefault" in e) e.preventDefault();
                   if (canSend) void handleSend();
                 }
               }}
               onContentSizeChange={(e) =>
                 setInputHeight(
-                  Math.min(120, Math.max(44, e.nativeEvent.contentSize.height)),
+                  Math.min(Spacing.maxNewMessageHeight, Math.max(Spacing.inputHeight, e.nativeEvent.contentSize.height)),
                 )
               }
             />
-            <Button disabled={!canSend} onPress={() => void handleSend()}>
+            <Button
+              disabled={!canSend}
+              onPress={() => void handleSend()}
+              circular
+              size="lg"
+              mb={2}
+              backgroundColor={canSend ? "accent" : "backgroundSelected"}
+            >
               {sending ? (
                 <Spinner color="text" />
               ) : (
@@ -332,6 +477,15 @@ export default function ChatScreen() {
           {!!error && <Text color="error">{error}</Text>}
         </YStack>
       </KeyboardAvoidingView>
+      <ConfirmDialog
+        visible={discardRow !== null}
+        title="Nachricht verwerfen"
+        message="Diese Nachricht wird aus der Warteschlange entfernt."
+        confirmLabel="Verwerfen"
+        destructive
+        onConfirm={() => void handleDiscard()}
+        onCancel={() => setDiscardRow(null)}
+      />
     </YStack>
   );
 }

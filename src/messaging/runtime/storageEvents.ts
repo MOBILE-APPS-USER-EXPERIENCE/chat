@@ -11,6 +11,7 @@ type Listener = () => void;
  */
 export class StorageEvents {
   private readonly chatListeners = new Set<Listener>();
+  private readonly anyMessageListeners = new Set<Listener>();
   private readonly messageListeners = new Map<number, Set<Listener>>();
   private readonly outboxListeners = new Map<number, Set<Listener>>();
 
@@ -25,6 +26,13 @@ export class StorageEvents {
     for (const listener of [...this.chatListeners]) listener();
   }
 
+  subscribeAnyMessages(listener: Listener): () => void {
+    this.anyMessageListeners.add(listener);
+    return () => {
+      this.anyMessageListeners.delete(listener);
+    };
+  }
+
   subscribeMessages(chatId: number, listener: Listener): () => void {
     const bus = this.messageListeners.get(chatId) ?? new Set<Listener>();
     if (!this.messageListeners.has(chatId))
@@ -37,6 +45,7 @@ export class StorageEvents {
   }
 
   emitMessages(chatId: number): void {
+    for (const listener of [...this.anyMessageListeners]) listener();
     const bus = this.messageListeners.get(chatId);
     if (bus === undefined) return;
     for (const listener of [...bus]) listener();

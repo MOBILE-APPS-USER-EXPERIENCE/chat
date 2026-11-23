@@ -9,6 +9,7 @@ export function useOutbox(chatId: number): {
   pending: OutboxRow[];
   sending: boolean;
   send: (text: string) => Promise<void>;
+  discard: (clientMessageId: string) => Promise<boolean>;
 } {
   const [pending, setPending] = useState<OutboxRow[]>([]);
   const [sending, setSending] = useState(false);
@@ -59,5 +60,8 @@ export function useOutbox(chatId: number): {
     }
   };
 
-  return { pending, sending, send };
+  const discard = async (clientMessageId: string): Promise<boolean> =>
+    syncRuntime.discardOutboxMessage(clientMessageId);
+
+  return { pending, sending, send, discard };
 }

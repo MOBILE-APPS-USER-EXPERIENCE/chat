@@ -96,6 +96,8 @@ export interface ChatRepository {
 }
 
 export interface ProfileRepository {
+  /** Lists all known profiles, ordered by userid. */
+  list(): Promise<ProfileRow[]>;
   /** Gets a profile by userid, or null when it is unknown. */
   get(userid: string): Promise<ProfileRow | null>;
   /** Gets a profile by its unique hash, or null when it is unknown. */
@@ -110,6 +112,8 @@ export interface ProfileRepository {
 export interface MessageRepository {
   /** Gets a message by chat and server id, or null when it is unknown. */
   get(chatId: number, id: number): Promise<RawMessage | null>;
+  /** Lists the highest-id message in each chat, ordered by chat id. */
+  listLatestPerChat(): Promise<RawMessage[]>;
   /** Lists messages newest first by server id, optionally before an exclusive id. */
   listPage(
     chatId: number,
@@ -132,14 +136,19 @@ export interface OutboxRepository {
   listByChat(chatId: number): Promise<OutboxRow[]>;
   /** Lists rows due to be sent now (pending, or failed with nextRetryAt <= now), oldest first, across all chats. */
   listDue(now: number): Promise<OutboxRow[]>;
+  /** Lists chat ids that have a sending row or a failed row with nextRetryAt in the future. */
+  listBlockedChatIds(now: number): Promise<number[]>;
   /** Creates a pending row. Throws if the chat does not exist; changes nothing on failure. */
   enqueue(
     input: OutboxInput,
     clientMessageId: string,
     now: number,
   ): Promise<OutboxRow>;
-  /** Transitions pending -> sending. A no-op (does not throw) if the row is not pending or unknown. */
-  markSending(clientMessageId: string): Promise<void>;
+  /**
+   * Transitions pending or failed -> sending.
+   * Returns true only when this call performed the transition; false for unknown or already-sending rows.
+   */
+  markSending(clientMessageId: string): Promise<boolean>;
   /** Transitions sending -> failed with the given message and next retry time. Unknown id: no-op. */
   markFailed(
     clientMessageId: string,
@@ -148,6 +157,8 @@ export interface OutboxRepository {
   ): Promise<void>;
   /** Deletes a row (used after a successful send). Unknown id: no-op. */
   remove(clientMessageId: string): Promise<void>;
+  /** Removes a row only when it is not currently sending; returns the removed row, or null. */
+  discard(clientMessageId: string): Promise<OutboxRow | null>;
   /** Resets every 'sending' row back to 'pending' (recovers from a crash mid-send). */
   resetStuckSending(): Promise<void>;
 }

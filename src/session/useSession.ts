@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
-import { session } from './index';
 import type { SessionState } from './ports';
+import { session } from './session';
 
 const SERVER_SNAPSHOT: SessionState = { status: 'initializing' };
 const getServerSnapshot = (): SessionState => SERVER_SNAPSHOT;

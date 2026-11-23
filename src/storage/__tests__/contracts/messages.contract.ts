@@ -6,7 +6,7 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
         let storage: AccountStorage;
         const msg = (id: number, text = `m${id}`): RawMessageInput => ({
             id, userid: 'abcdit01', userNick: 'A', userFullname: null, userHash: null,
-            serverTime: '2026-11-17_10-00-00', important: false, text,
+            serverTime: '2026-11-17_10-00-00', sentAt: Date.UTC(2026, 10, 17, 9, 0, 0), important: false, text,
             photoId: null, fileId: null, position: null,
         });
 
@@ -16,6 +16,29 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
                 id: 3, name: 'Team', visibility: 'private', directchat: false,
                 role: 'member', joined: true, ownerUserid: 'efghit02', members: [],
             }], 1000);
+        });
+
+        it('lists the latest message per chat by chat id and returns copies', async () => {
+            await storage.chats.applySnapshot([
+                { id: 3, name: 'Team', visibility: 'private', directchat: false, role: 'member', joined: true, ownerUserid: null, members: [] },
+                { id: 1, name: 'Other', visibility: 'private', directchat: false, role: 'member', joined: true, ownerUserid: null, members: [] },
+                { id: 2, name: 'Empty', visibility: 'private', directchat: false, role: 'member', joined: true, ownerUserid: null, members: [] },
+            ], 1000);
+            await storage.messages.appendBatch(3, [msg(1), msg(5), msg(3)], 2000);
+            await storage.messages.appendBatch(1, [msg(2, 'first'), msg(7, 'latest')], 2000);
+            expect(await storage.messages.listLatestPerChat()).toEqual([
+                expect.objectContaining({ chatId: 1, id: 7, text: 'latest' }),
+                expect.objectContaining({ chatId: 3, id: 5, text: 'm5' }),
+            ]);
+            expect(await storage.messages.listLatestPerChat()).toHaveLength(2);
+            const latest = await storage.messages.listLatestPerChat();
+            latest[0].text = 'mutated';
+            expect((await storage.messages.listLatestPerChat())[0].text).toBe('latest');
+            expect(await storage.messages.listLatestPerChat()).not.toContainEqual(expect.objectContaining({ chatId: 2 }));
+        });
+
+        it('returns an empty latest-message list for an empty database', async () => {
+            expect(await storage.messages.listLatestPerChat()).toEqual([]);
         });
 
         it('inserts a batch once, ignores duplicates, and advances the cursor', async () => {
@@ -119,6 +142,15 @@ export function messageRepositoryContract(name: string, make: () => Promise<Acco
             expect(stored.map(message => message?.important)).toEqual([false, false, false, false, true, false]);
             expect(stored[4]).toMatchObject({ userNick: null, userFullname: 'Full Name', userHash: 'h', serverTime: null, photoId: 'p', fileId: 'f', position: '7' });
             expect(stored[5]).toMatchObject({ id: 2_000_000_000, chatId: 3 });
+        });
+
+        it('round-trips sentAt including null', async () => {
+            await storage.messages.appendBatch(3, [
+                { ...msg(1), sentAt: 123456789 },
+                { ...msg(2), sentAt: null },
+            ], 2000);
+            expect((await storage.messages.get(3, 1))?.sentAt).toBe(123456789);
+            expect((await storage.messages.get(3, 2))?.sentAt).toBeNull();
         });
     });
 }

@@ -1,5 +1,6 @@
-import { Spacing } from "@/constants/layout";
+import { Spacing } from "@/config/layout";
 import { useRouter } from "expo-router";
+import type { ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Text, XStack, YStack } from "tamagui";
 import Avatar, { AvatarProps } from "./avatar";
@@ -10,11 +11,15 @@ export default function Header({
   subtitle,
   avatar,
   showBackButton = true,
+  action,
+  showSeparator = false,
 }: Readonly<{
   title?: string;
   subtitle?: string;
   avatar?: AvatarProps;
   showBackButton?: boolean;
+  action?: ReactNode;
+  showSeparator?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -31,7 +36,9 @@ export default function Header({
       justify="flex-start"
       pt={paddingTop}
       pb={verticalPadding}
-      px={Spacing.four}
+      px={Spacing.three}
+      borderBottomWidth={showSeparator ? 1 : 0}
+      borderBottomColor={showSeparator ? "accent" : "transparent"}
     >
       {showBackButton && (
         <Button
@@ -51,15 +58,18 @@ export default function Header({
       )}
 
       {avatar && (
-        <Avatar label={avatar.label} placeholder={avatar.placeholder} />
+        <Avatar label={avatar.label} placeholder={avatar.placeholder} mr={Spacing.two} />
       )}
 
-      <YStack>
+      <YStack flex={1}>
         <Text fontWeight="600" color="text" fontSize={24}>
           {title}
         </Text>
-        <Text color="text">{subtitle}</Text>
+        {subtitle && (
+          <Text color="text">{subtitle}</Text>
+        )}
       </YStack>
+      {action}
     </XStack>
   );
 }

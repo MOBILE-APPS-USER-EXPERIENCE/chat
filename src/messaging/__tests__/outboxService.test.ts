@@ -119,6 +119,37 @@ describe("OutboxService", () => {
     expect(freshApi.postMessageCalls).toHaveLength(1);
   });
 
+  it("shows a retried failed row as sending while postMessage is held", async () => {
+    const service = createService();
+    await service.enqueue(1, "hello");
+    await storage.outbox.markFailed("id-1", "offline", now);
+    const release = api.holdPost();
+    const drainPromise = service.drain();
+    for (let i = 0; i < 20 && api.callsOf("postMessage").length === 0; i++) {
+      await Promise.resolve();
+    }
+
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
+    release();
+    await drainPromise;
+  });
+
+  it("does not post a due row discarded after listDue but before its turn", async () => {
+    const service = createService();
+    await service.enqueue(1, "discard me");
+    const originalListDue = storage.outbox.listDue.bind(storage.outbox);
+    storage.outbox.listDue = async (dueNow: number) => {
+      const due = await originalListDue(dueNow);
+      await storage.outbox.discard("id-1");
+      return due;
+    };
+
+    await service.drain();
+
+    expect(api.postMessageCalls).toEqual([]);
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+  });
+
   it("stops draining on an invalid token and calls onInvalidToken once", async () => {
     api.failWith("postMessage", new InvalidTokenError());
     const service = createService();
@@ -149,6 +180,74 @@ describe("OutboxService", () => {
     expect(sentChats).toEqual([]);
   });
 
+  it("stops the whole drain after the first network error", async () => {
+    api.failWith("postMessage", new FakeNetworkError());
+    const service = createService();
+    await service.enqueue(1, "first");
+    await service.enqueue(2, "second");
+
+    await service.drain();
+
+    expect(api.postMessageCalls).toEqual([]);
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("failed");
+    expect((await storage.outbox.listByChat(2))[0]?.status).toBe("pending");
+  });
+
+  it("blocks later rows of one chat after a failure but continues other chats", async () => {
+    api.failWith("postMessage", new Error("boom"), { chatId: 1 });
+    const service = createService();
+    await service.enqueue(1, "first");
+    await service.enqueue(1, "second");
+    await service.enqueue(2, "other");
+
+    await service.drain();
+
+    expect(api.callsOf("postMessage").map((call) => call.chatId)).toEqual([1, 2]);
+    expect((await storage.outbox.listByChat(1))[1]?.status).toBe("pending");
+  });
+
+  it("blocks later rows while an earlier row is sending or future-failed", async () => {
+    const service = createService();
+    await service.enqueue(1, "sending");
+    await storage.outbox.markSending("id-1");
+    await service.enqueue(1, "later");
+    await service.drain();
+    expect(api.postMessageCalls).toEqual([]);
+
+    await storage.outbox.resetStuckSending();
+    const [first] = await storage.outbox.listByChat(1);
+    if (first) await storage.outbox.markFailed(first.clientMessageId, "offline", now + 5000);
+    await service.drain();
+    expect(api.postMessageCalls).toEqual([]);
+  });
+
+  it("remove throwing after success leaves the row sending and does not resend it", async () => {
+    const service = createService();
+    await service.enqueue(1, "hello");
+    const throwingOutbox = storage.outbox;
+    throwingOutbox.remove = async () => {
+      throw new Error("remove failed");
+    };
+
+    await expect(service.drain()).rejects.toThrow("remove failed");
+
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
+    expect(api.postMessageCalls).toHaveLength(1);
+  });
+
+  it("discards only a non-sending row", async () => {
+    const service = createService();
+    await service.enqueue(1, "failed");
+    await storage.outbox.markFailed("id-1", "offline", now + 1000);
+    expect(await service.discard("id-1")).toBe(true);
+    expect(await storage.outbox.listByChat(1)).toEqual([]);
+
+    await service.enqueue(1, "sending");
+    await storage.outbox.markSending("id-2");
+    expect(await service.discard("id-2")).toBe(false);
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
+  });
+
   it("discards without writing when isCurrent() turns false mid-drain", async () => {
     const service = createService();
     await service.enqueue(1, "hello");
@@ -163,6 +262,22 @@ describe("OutboxService", () => {
     expect(row?.status).toBe("sending");
     expect(rowChanged).toEqual([]);
     expect(sentChats).toEqual([]);
+  });
+
+  it("stays sending and does not post when alive becomes false directly before postMessage", async () => {
+    const service = createService();
+    await service.enqueue(1, "hello");
+    const originalMarkSending = storage.outbox.markSending.bind(storage.outbox);
+    storage.outbox.markSending = async (clientMessageId: string) => {
+      const transitioned = await originalMarkSending(clientMessageId);
+      current = false;
+      return transitioned;
+    };
+
+    await service.drain();
+
+    expect(api.postMessageCalls).toEqual([]);
+    expect((await storage.outbox.listByChat(1))[0]?.status).toBe("sending");
   });
 
   it("calls resetStuckSending on init()", async () => {

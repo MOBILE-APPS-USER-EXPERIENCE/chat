@@ -50,6 +50,7 @@ describe("SQLite-specific repository behavior", () => {
     userFullname: null,
     userHash: null,
     serverTime: "2026-11-17_10-00-00",
+    sentAt: Date.UTC(2026, 10, 17, 9, 0, 0),
     important: false,
     text,
     photoId: null,

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, lt } from 'drizzle-orm';
+import { and, count, desc, eq, gt, lt, sql } from 'drizzle-orm';
 
 import { toRawMessage } from './mappers';
 import { chats, rawMessages } from './schema';
@@ -22,6 +22,40 @@ export class SqliteMessageRepository implements MessageRepository {
             .where(and(eq(rawMessages.chatId, chatId), eq(rawMessages.id, id)))
             .get();
         return row ? toRawMessage(row) : null;
+    }
+
+    async listLatestPerChat() {
+        type RawMessageDbRow = Omit<typeof rawMessages.$inferSelect, 'important'> & { important: number };
+        const rows = this.db.all<RawMessageDbRow>(sql`
+            SELECT rm.chat_id AS chatId,
+                   rm.id AS id,
+                   rm.userid AS userid,
+                   rm.user_nick AS userNick,
+                   rm.user_fullname AS userFullname,
+                   rm.user_hash AS userHash,
+                   rm.server_time AS serverTime,
+                   rm.sent_at AS sentAt,
+                   rm.important AS important,
+                   rm.text AS text,
+                   rm.photo_id AS photoId,
+                   rm.file_id AS fileId,
+                   rm.position AS position,
+                   rm.received_at AS receivedAt
+            FROM (
+                SELECT chat_id, max(id) AS id
+                FROM raw_messages
+                GROUP BY chat_id
+            ) latest
+            INNER JOIN chats ON chats.id = latest.chat_id
+            INNER JOIN raw_messages rm
+                ON rm.chat_id = latest.chat_id
+                AND rm.id = latest.id
+            ORDER BY latest.chat_id ASC
+        `);
+        return rows.map(row => toRawMessage({
+            ...row,
+            important: row.important === 1,
+        }));
     }
 
     async listPage(chatId: number, opts: { beforeId?: number; limit: number }) {
@@ -67,6 +101,7 @@ export class SqliteMessageRepository implements MessageRepository {
                         userFullname: message.userFullname,
                         userHash: message.userHash,
                         serverTime: message.serverTime,
+                        sentAt: message.sentAt,
                         important: message.important,
                         text: message.text,
                         photoId: message.photoId,

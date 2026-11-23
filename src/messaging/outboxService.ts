@@ -23,7 +23,10 @@ export type OutboxDeps = {
    * chat id. Lets the caller republish a local-storage-changed event without changing
    * `drain()`'s `Promise<void>` return type; has no effect on retry behavior.
    */
-  onRowChanged?: (chatId: number) => void;
+  onRowChanged?: (
+    chatId: number,
+    reason: "sent" | "failed" | "discarded",
+  ) => void;
   /**
    * Called synchronously right after a row's message was successfully posted and removed from
    * the outbox (never on a send failure, never on a network/invalid-token failure). Lets the
@@ -93,11 +96,27 @@ export class OutboxService {
   async drain(): Promise<void> {
     if (!this.alive()) return;
     const due = await this.deps.storage.outbox.listDue(this.deps.now());
+    const blockedChatIds = new Set(
+      await this.deps.storage.outbox.listBlockedChatIds(this.deps.now()),
+    );
+    const failedInDrain = new Set<number>();
     for (const row of due) {
       if (!this.alive()) return; // discard the remaining rows without writing
+      if (blockedChatIds.has(row.chatId) || failedInDrain.has(row.chatId))
+        continue;
       const stop = await this.sendOne(row);
-      if (stop) return;
+      if (stop.failedInDrain) failedInDrain.add(row.chatId);
+      if (stop.stop) return;
     }
+  }
+
+  /** Removes a failed/pending row, but leaves a currently sending row untouched. */
+  async discard(clientMessageId: string): Promise<boolean> {
+    const removed =
+      await this.deps.storage.outbox.discard(clientMessageId);
+    if (removed === null) return false;
+    this.notifyRowChanged(removed.chatId, "discarded");
+    return true;
   }
 
   /** After this, no further writes; an in-flight `drain()` finishes without writing. */
@@ -106,28 +125,29 @@ export class OutboxService {
   }
 
   /** Returns true when draining must stop (an invalid token was reported). */
-  private async sendOne(row: OutboxRow): Promise<boolean> {
-    await this.deps.storage.outbox.markSending(row.clientMessageId);
+  private async sendOne(
+    row: OutboxRow,
+  ): Promise<{ stop: boolean; failedInDrain: boolean }> {
+    const transitioned =
+      await this.deps.storage.outbox.markSending(row.clientMessageId);
+    if (!transitioned) return { stop: false, failedInDrain: false };
+    if (!this.alive()) return { stop: false, failedInDrain: false };
+    let postSucceeded = false;
     try {
       await this.deps.api.postMessage(
         row.chatId,
         row.text ?? "",
         row.important,
       );
-      if (!this.alive()) return false; // discard without writing remove()
-      await this.deps.storage.outbox.remove(row.clientMessageId);
-      this.deps.onRowChanged?.(row.chatId);
-      // Fire-and-forget on the caller's side: lets the real message replace the optimistic
-      // row as soon as possible instead of waiting for the next scheduled cycle (see onSent).
-      this.deps.onSent?.(row.chatId);
-      return false;
+      postSucceeded = true;
     } catch (error) {
       if (error instanceof InvalidTokenError) {
         if (this.alive()) this.deps.onInvalidToken?.();
         // The row stays 'sending'; it is recovered by the next resetStuckSending() on open.
-        return true;
+        return { stop: true, failedInDrain: false };
       }
-      if (!this.alive()) return false; // discard without writing markFailed()
+      if (!this.alive())
+        return { stop: false, failedInDrain: false }; // discard without writing markFailed()
       const message = this.deps.isNetworkError(error)
         ? "offline"
         : error instanceof ChatNotFoundError
@@ -143,8 +163,36 @@ export class OutboxService {
         message,
         this.deps.now() + delay,
       );
-      this.deps.onRowChanged?.(row.chatId);
-      return false;
+      this.notifyRowChanged(row.chatId, "failed");
+      if (this.deps.isNetworkError(error))
+        return { stop: true, failedInDrain: true };
+      return { stop: false, failedInDrain: true };
+    }
+
+    if (!postSucceeded) return { stop: false, failedInDrain: false };
+    if (!this.alive()) return { stop: false, failedInDrain: false };
+    await this.deps.storage.outbox.remove(row.clientMessageId);
+    this.notifyRowChanged(row.chatId, "sent");
+    this.notifySent(row.chatId);
+    return { stop: false, failedInDrain: false };
+  }
+
+  private notifyRowChanged(
+    chatId: number,
+    reason: "sent" | "failed" | "discarded",
+  ): void {
+    try {
+      this.deps.onRowChanged?.(chatId, reason);
+    } catch {
+      // Local UI callbacks must not change send success or failure bookkeeping.
+    }
+  }
+
+  private notifySent(chatId: number): void {
+    try {
+      this.deps.onSent?.(chatId);
+    } catch {
+      // Poll callbacks must not turn a successful post into a resend.
     }
   }
 

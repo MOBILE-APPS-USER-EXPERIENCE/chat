@@ -10,6 +10,15 @@ export class MemoryMessageRepository implements MessageRepository {
         return message ? { ...message } : null;
     }
 
+    async listLatestPerChat() {
+        return [...this.db.messages.entries()]
+            .sort(([chatIdA], [chatIdB]) => chatIdA - chatIdB)
+            .flatMap(([, messages]) => {
+                const latest = [...messages.values()].sort((a, b) => b.id - a.id)[0];
+                return latest ? [{ ...latest }] : [];
+            });
+    }
+
     async listPage(chatId: number, opts: { beforeId?: number; limit: number }) {
         if (!Number.isInteger(opts.limit) || opts.limit <= 0) {
             throw new RangeError(`limit must be a positive integer, got ${opts.limit}`);

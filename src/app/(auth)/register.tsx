@@ -3,13 +3,17 @@ import { AuthScreen } from "@/components/auth/auth-screen";
 import { ServerField } from "@/components/auth/server-field";
 import { useAuthSubmit } from "@/hooks/use-auth-submit";
 import { session } from "@/session";
-import { useState } from "react";
+import type { TamaguiElement } from "@tamagui/web";
+import { useRef, useState } from "react";
 
 export default function RegisterScreen() {
   const [userid, setUserid] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
   const [fullname, setFullname] = useState("");
+  const passwordRef = useRef<TamaguiElement>(null);
+  const nicknameRef = useRef<TamaguiElement>(null);
+  const fullnameRef = useRef<TamaguiElement>(null);
   const { error, isSubmitting, submit } = useAuthSubmit(
     "Registrierung fehlgeschlagen.",
   );
@@ -51,9 +55,13 @@ export default function RegisterScreen() {
         disabled={isSubmitting}
         onChangeText={setUserid}
         placeholder="z. B. abcdit01"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => passwordRef.current?.focus()}
         value={userid}
       />
       <AuthField
+        ref={passwordRef}
         id="register-password"
         label="Passwort"
         autoCapitalize="none"
@@ -65,9 +73,12 @@ export default function RegisterScreen() {
         onChangeText={setPassword}
         placeholder="Passwort"
         returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => nicknameRef.current?.focus()}
         value={password}
       />
       <AuthField
+        ref={nicknameRef}
         id="register-nickname"
         label="Anzeigename"
         autoComplete="nickname"
@@ -76,9 +87,12 @@ export default function RegisterScreen() {
         onChangeText={setNickname}
         placeholder="Dein Anzeigename"
         returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => fullnameRef.current?.focus()}
         value={nickname}
       />
       <AuthField
+        ref={fullnameRef}
         id="register-fullname"
         label="Vollständiger Name"
         autoComplete="name"

@@ -2,6 +2,7 @@
 // `src/messaging/ports.ts` already type-imports `AccountStorage` the same way.
 import type { AccountStorage } from "../../storage/ports";
 import { OutboxService, type OutboxDeps } from "../outboxService";
+import { ChatActions, type ChatActionResult } from "../chatActions";
 import type {
   CycleOptions,
   CycleResult,
@@ -13,6 +14,7 @@ import type {
 import { SyncService } from "../syncService";
 import type { ForegroundSignal } from "./foregroundSignal";
 import type { StorageEvents } from "./storageEvents";
+import { parseServerTime } from "../serverTime";
 
 const DEFAULT_INTERVAL_MS = 5000;
 
@@ -20,6 +22,7 @@ export type SessionLike = {
   getState(): {
     status: "initializing" | "signed_out" | "signed_in";
     account?: { id: string };
+    server?: { url: string };
   };
   subscribe(listener: () => void): () => void;
 };
@@ -27,7 +30,8 @@ export type SessionLike = {
 export type SchedulerDeps = {
   session: SessionLike;
   openAccountStorage: (accountId: string) => Promise<AccountStorage>;
-  createSyncApi: () => SyncApi;
+  createSyncApi: (server: { url: string }) => SyncApi;
+  createChatActionsApi: () => import("../ports").ChatActionsApi;
   foreground: ForegroundSignal;
   events: StorageEvents;
   now: () => number;
@@ -71,10 +75,11 @@ export class SyncScheduler {
   private storage: AccountStorage | null = null;
   private syncService: SyncService | null = null;
   private outboxService: OutboxService | null = null;
+  private chatActions: ChatActions | null = null;
   private openChatId: number | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
-  private outboxInFlight = false;
+  private outboxDrainState: { inFlight: boolean; dirty: boolean } | null = null;
   private sessionUnsub: (() => void) | null = null;
   private foregroundUnsub: (() => void) | null = null;
   private statusSnapshot: SyncRuntimeStatus = {
@@ -115,6 +120,7 @@ export class SyncScheduler {
     const storage = this.storage;
     this.syncService = null;
     this.outboxService = null;
+    this.chatActions = null;
     this.storage = null;
     this.currentAccountId = null;
     this.resetStatus();
@@ -166,6 +172,51 @@ export class SyncScheduler {
     return result;
   }
 
+  async createGroup(input: {
+    name: string;
+    isPublic: boolean;
+  }): Promise<ChatActionResult> {
+    if (this.chatActions === null)
+      throw new Error("No active account to create a chat");
+    const result = await this.chatActions.createGroup(input);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
+  async createDirectChat(input: {
+    name: string;
+    inviteeHash: string;
+  }): Promise<ChatActionResult> {
+    if (this.chatActions === null)
+      throw new Error("No active account to create a chat");
+    const result = await this.chatActions.createDirectChat(input);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
+  async inviteToChat(chatId: number, hash: string): Promise<void> {
+    if (this.chatActions === null)
+      throw new Error("No active account to invite a person");
+    const refreshed = await this.chatActions.invite(chatId, hash);
+    if (refreshed) this.deps.events.emitChats();
+  }
+
+  async joinChat(chatId: number): Promise<{ refreshed: boolean }> {
+    if (this.chatActions === null)
+      throw new Error("No active account to join a chat");
+    const result = await this.chatActions.joinChat(chatId);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
+  async rejectInvite(chatId: number): Promise<{ refreshed: boolean }> {
+    if (this.chatActions === null)
+      throw new Error("No active account to reject an invitation");
+    const result = await this.chatActions.rejectInvite(chatId);
+    if (result.refreshed) this.deps.events.emitChats();
+    return result;
+  }
+
   /**
    * Enqueues one text message for the active account and immediately kicks off a send attempt.
    * Throws (plain `Error`) when there is no active account storage yet, or when `text` is empty
@@ -187,7 +238,16 @@ export class SyncScheduler {
    */
   flushOutbox(chatId?: number): void {
     void chatId;
+    if (this.outboxService === null || this.outboxDrainState === null) return;
+    this.outboxDrainState.dirty = true;
     void this.runOutboxDrain(this.generation);
+  }
+
+  async discardOutboxMessage(clientMessageId: string): Promise<boolean> {
+    if (this.outboxService === null) return false;
+    const discarded = await this.outboxService.discard(clientMessageId);
+    if (discarded) this.flushOutbox();
+    return discarded;
   }
 
   // ---- session / foreground transitions --------------------------------------------------
@@ -207,6 +267,8 @@ export class SyncScheduler {
     const previousStorage = this.storage;
     this.syncService = null;
     this.outboxService = null;
+    this.outboxDrainState = null;
+    this.chatActions = null;
     this.storage = null;
     this.currentAccountId = nextAccountId;
     this.resetStatus();
@@ -263,6 +325,8 @@ export class SyncScheduler {
     this.inFlight = true;
     try {
       await this.tick(generation);
+    } catch {
+      // An unexpected tick error must not terminate the timer loop; it is retried on the next tick.
     } finally {
       this.inFlight = false;
     }
@@ -284,27 +348,52 @@ export class SyncScheduler {
       return;
     const opts: CycleOptions = {};
     if (this.openChatId !== null) opts.openChatId = this.openChatId;
-    const result = await this.syncService.runCycle(opts);
+    let result: CycleResult;
+    try {
+      result = await this.syncService.runCycle(opts);
+    } catch (error) {
+      await this.runOutboxDrain(generation);
+      throw error;
+    }
     if (this.stopped || generation !== this.generation) return;
     this.applyCycleResult(result);
-    // The outbox is drained alongside the sync cycle, not as part of it: an unexpected outbox
-    // failure is caught inside `runOutboxDrain` and must never abort chat polling.
-    await this.runOutboxDrain(generation);
+    if (result.status === "ok") {
+      // The outbox is drained alongside an ok sync cycle, not alongside token/offline/aborted results.
+      await this.runOutboxDrain(generation);
+    }
   }
 
   private async runOutboxDrain(generation: number): Promise<void> {
     if (this.stopped || generation !== this.generation) return;
-    if (this.outboxService === null) return;
-    if (this.outboxInFlight) return; // a drain is already running; this call is redundant
-    this.outboxInFlight = true;
+    const service = this.outboxService;
+    const state = this.outboxDrainState;
+    if (service === null || state === null) return;
+    if (generation !== this.generation || this.outboxService !== service) return;
+    if (state.inFlight) {
+      state.dirty = true;
+      return;
+    }
+    state.inFlight = true;
     try {
-      await this.outboxService.drain();
-    } catch {
-      // `drain()` writes ordinary send failures as 'failed' rows and never throws for them;
-      // only a genuinely unexpected storage error reaches here. Swallow it so a broken outbox
-      // never blocks chat polling — the next tick or flushOutbox() call retries.
+      do {
+        if (
+          this.stopped ||
+          generation !== this.generation ||
+          this.outboxService !== service ||
+          this.outboxDrainState !== state
+        )
+          return;
+        state.dirty = false;
+        try {
+          await service.drain();
+        } catch {
+          // `drain()` writes ordinary send failures as 'failed' rows and never throws for them;
+          // only a genuinely unexpected storage error reaches here. Swallow it so a broken outbox
+          // never blocks chat polling — the next tick or flushOutbox() call retries.
+        }
+      } while (state.dirty);
     } finally {
-      this.outboxInFlight = false;
+      state.inFlight = false;
     }
   }
 
@@ -312,6 +401,8 @@ export class SyncScheduler {
     const accountId = this.currentAccountId;
     if (accountId === null || this.stopped || generation !== this.generation)
       return false;
+    const state = this.deps.session.getState();
+    if (state.status !== "signed_in" || state.server === undefined) return false;
     let storage: AccountStorage | null = null;
     try {
       storage = await this.deps.openAccountStorage(accountId);
@@ -321,7 +412,7 @@ export class SyncScheduler {
         });
         return false;
       }
-      const api = this.deps.createSyncApi();
+      const api = this.deps.createSyncApi(state.server);
       const serviceDeps: SyncDeps = {
         api,
         storage,
@@ -342,17 +433,44 @@ export class SyncScheduler {
         isNetworkError: this.deps.isNetworkError,
         onInvalidToken: this.deps.onInvalidToken,
         newId: this.deps.newId,
-        onRowChanged: (chatId) => this.deps.events.emitOutbox(chatId),
+        onRowChanged: (chatId, reason) => {
+          if (reason !== "sent") this.deps.events.emitOutbox(chatId);
+        },
         // Shrinks the gap between the optimistic row disappearing and the real message showing
         // up: instead of waiting for the next ~5s cycle, poll this one chat right away. Reuses
         // `pollNow`, which already serializes with cycle polls of the same chat and only emits
         // `emitMessages` when something was actually inserted. Fire-and-forget: a slow or
         // failing poll must not delay draining the next outbox row.
         onSent: (chatId) => {
-          void this.pollNow(chatId);
+          void (async () => {
+            if (!this.isCurrentAccount(accountId, generation)) return;
+            let result: PollResult;
+            try {
+              result = await syncService.pollNow(chatId);
+            } catch {
+              result = { status: "aborted" };
+            }
+            if (!this.isCurrentAccount(accountId, generation)) return;
+            if (
+              (result.status === "ok" || result.status === "reset") &&
+              result.inserted > 0
+            ) {
+              this.deps.events.emitMessages(chatId);
+            }
+            this.deps.events.emitOutbox(chatId);
+          })();
         },
       };
       const outboxService = new OutboxService(outboxDeps);
+      const chatActions = new ChatActions({
+        api: this.deps.createChatActionsApi(),
+        refreshChats: async () => {
+          const result = await syncService.refreshChats();
+          if (result === "updated") this.deps.events.emitChats();
+          return result;
+        },
+        onInvalidToken: this.deps.onInvalidToken,
+      });
       // Recovers rows left 'sending' by a crash mid-send. Treated the same as a failed storage
       // open on failure: discard everything constructed so far and retry on the next tick.
       await outboxService.init();
@@ -365,9 +483,35 @@ export class SyncScheduler {
         return false;
       }
 
+      const chats = await storage.chats.list();
+      if (!this.isCurrentAccount(accountId, generation)) {
+        await storage.close().catch(() => {
+          // Superseded during the repair scan: discard this handle.
+        });
+        return false;
+      }
+      for (const chat of chats) {
+        if (!this.isCurrentAccount(accountId, generation)) break;
+        if (!chat.joined) continue;
+        const [newest] = await storage.messages.listPage(chat.id, { limit: 1 });
+        if (!this.isCurrentAccount(accountId, generation)) break;
+        if (
+          newest !== undefined &&
+          newest.sentAt === null &&
+          newest.serverTime !== null &&
+          parseServerTime(newest.serverTime) !== null
+        ) {
+          await storage.messages.resetChat(chat.id);
+          if (!this.isCurrentAccount(accountId, generation)) break;
+          this.deps.events.emitMessages(chat.id);
+        }
+      }
+
       this.storage = storage;
       this.syncService = syncService;
       this.outboxService = outboxService;
+      this.chatActions = chatActions;
+      this.outboxDrainState = { inFlight: false, dirty: false };
       return true;
     } catch {
       if (storage !== null) {

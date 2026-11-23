@@ -2,6 +2,18 @@
 import { StorageEvents } from "./storageEvents";
 
 describe("StorageEvents", () => {
+  test("subscribeAnyMessages receives emitMessages for any chat", () => {
+    const events = new StorageEvents();
+    const listener = jest.fn();
+    const unsubscribe = events.subscribeAnyMessages(listener);
+    events.emitMessages(1);
+    events.emitMessages(2);
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    events.emitMessages(3);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
   test("chats bus fires all subscribers", () => {
     const events = new StorageEvents();
     const a = jest.fn();
