@@ -4,6 +4,7 @@ import { FlatList } from "react-native";
 import { Button, isWeb, Spinner, Text, XStack, YStack } from "tamagui";
 
 import Avatar from "@/components/avatar";
+import ExamPhaseCard from "@/components/exam-phase-card";
 import Header from "@/components/header";
 import { Plus } from "@/components/icons";
 import { config } from "@/config/config";
@@ -186,6 +187,7 @@ export default function Index() {
       />
 
       <YStack flex={1} gap={Spacing.two} pt={Spacing.two}>
+        <ExamPhaseCard />
         <ChatListBody
           loading={loading}
           chats={sortedChats}
