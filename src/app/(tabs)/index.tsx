@@ -24,7 +24,7 @@ function ChatListItem({
   profiles: import("@/storage/types").ProfileRow[];
   selfUserid: string;
 }>) {
-  const { members } = useChatMembers(chat.id);
+  const { members } = useChatMembers(chat.id, chat.directchat);
   const displayName = chatDisplayName({
     chat,
     members,

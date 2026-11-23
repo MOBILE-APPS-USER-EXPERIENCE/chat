@@ -1,5 +1,3 @@
-import { ApiError } from "@/api/apiClient";
-
 import type { ChatActionsApi, ChatRefreshResult } from "./ports";
 import { InvalidTokenError } from "./errors";
 
@@ -60,12 +58,13 @@ export class ChatActions {
       return this.rethrowAfterInvalidToken(error);
     }
 
-    const refreshed = await this.refreshAfterCreate();
+    let refreshed = await this.refreshAfterCreate();
     try {
       await this.deps.api.invite(chatId, inviteeHash);
+      refreshed = await this.refreshAfterCreate();
       return { chatId, refreshed };
     } catch (error) {
-      if (error instanceof InvalidTokenError || (error instanceof ApiError && error.code === 456)) {
+      if (error instanceof InvalidTokenError) {
         this.deps.onInvalidToken?.();
       }
       throw new InviteAfterCreateError(chatId, error);
@@ -94,7 +93,7 @@ export class ChatActions {
   }
 
   private rethrowAfterInvalidToken(error: unknown): never {
-    if (error instanceof InvalidTokenError || (error instanceof ApiError && error.code === 456))
+    if (error instanceof InvalidTokenError)
       this.deps.onInvalidToken?.();
     throw error;
   }

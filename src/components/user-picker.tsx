@@ -4,6 +4,7 @@ import { Button, Input, Text, XStack, YStack } from "tamagui";
 
 import { Spacing } from "@/config/layout";
 import type { ProfileRow } from "@/storage/types";
+import { resolveInvitee } from "@/utils/chat-actions";
 
 export type InviteeSelection =
   | { type: "profile"; profile: ProfileRow }
@@ -29,50 +30,42 @@ export default function UserPicker({
   selected,
   onChange,
   maxSelections = null,
+  excludeUserids = [],
 }: Readonly<{
   profiles: ProfileRow[];
   selfUserid: string;
   selected: InviteeSelection[];
   onChange: (selections: InviteeSelection[]) => void;
   maxSelections?: number | null;
+  excludeUserids?: string[];
 }>) {
   const [query, setQuery] = useState("");
   const trimmed = query.trim();
-  const needle = trimmed.toLowerCase();
   const selectedKeys = new Set(selected.map(selectionKey));
+  const selectedProfileUserids = selected
+    .filter((selection) => selection.type === "profile")
+    .map((selection) => selection.profile.userid);
+  const search = resolveInvitee(
+    trimmed,
+    profiles,
+    selfUserid,
+    [...excludeUserids, ...selectedProfileUserids],
+  );
 
   const canAddMore =
     maxSelections === null || selected.length < maxSelections;
 
-  // Search first, then exclude selected profiles from the displayed list.
-  const allMatches = profiles.filter((profile) => {
-    if (!canAddMore) return false;
-
-    if (profile.missingSince !== null) return false;
-    if (profile.userid.toLowerCase() === selfUserid.toLowerCase()) return false;
-    if (needle.length === 0) return true;
-
-    return (
-      profile.userid.toLowerCase().includes(needle) ||
-      (profile.nickname?.toLowerCase().includes(needle) ?? false) ||
-      (profile.fullname?.toLowerCase().includes(needle) ?? false)
-    );
-  });
-
-  const matches = allMatches.filter(
-    (profile) =>
-      !selectedKeys.has(selectionKey({ type: "profile", profile }))
-  );
-
-  const hashSelection: InviteeSelection = { type: "hash", hash: trimmed };
+  const matches = canAddMore ? search.matches : [];
+  const hashSelection: InviteeSelection =
+    search.resolution?.type === "hash"
+      ? { type: "hash", hash: search.resolution.hash }
+      : { type: "hash", hash: trimmed };
   const offerHash =
-    allMatches.length === 0 &&
-    /^[A-Za-z0-9]{8}$/.test(trimmed) &&
-    !/^[a-z]{4}it\d{2}$/i.test(trimmed) &&
+    search.resolution?.type === "hash" &&
     !selectedKeys.has(selectionKey(hashSelection));
 
   const unknownUserid =
-    allMatches.length === 0 && /^[a-z]{4}it\d{2}$/i.test(trimmed);
+    search.resolution?.type === "userid-not-found";
 
   function addSelection(selection: InviteeSelection) {
     if (canAddMore &&

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
 import { storageEvents, syncRuntime } from "../messaging/runtime";
+import { keepIfEqual } from "../utils/keep-if-equal";
 
 const STORAGE_RETRY_MS = 200;
 
 export function useChatMembers(
   chatId: number,
+  enabled = true,
 ): { members: { userid: string; role: "owner" | "member" | "invited" }[] } {
   const [members, setMembers] = useState<
     { userid: string; role: "owner" | "member" | "invited" }[]
@@ -13,6 +15,7 @@ export function useChatMembers(
   const requestId = useRef(0);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const load = (): void => {
@@ -26,7 +29,7 @@ export function useChatMembers(
         .listMembers(chatId)
         .then((rows) => {
           if (cancelled || id !== requestId.current) return;
-          setMembers(rows);
+          setMembers((previous) => keepIfEqual(previous, rows));
         })
         .catch(() => undefined);
     };
@@ -37,7 +40,7 @@ export function useChatMembers(
       if (retryTimer !== null) clearTimeout(retryTimer);
       unsubscribe();
     };
-  }, [chatId]);
+  }, [chatId, enabled]);
 
-  return { members };
+  return { members: enabled ? members : [] };
 }

@@ -421,7 +421,20 @@ export class SyncScheduler {
         // failing poll must not delay draining the next outbox row.
         onSent: (chatId) => {
           void (async () => {
-            await this.pollNow(chatId);
+            if (!this.isCurrentAccount(accountId, generation)) return;
+            let result: PollResult;
+            try {
+              result = await syncService.pollNow(chatId);
+            } catch {
+              result = { status: "aborted" };
+            }
+            if (!this.isCurrentAccount(accountId, generation)) return;
+            if (
+              (result.status === "ok" || result.status === "reset") &&
+              result.inserted > 0
+            ) {
+              this.deps.events.emitMessages(chatId);
+            }
             this.deps.events.emitOutbox(chatId);
           })();
         },

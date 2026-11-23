@@ -13,31 +13,59 @@ export function resolveInvitee(
   input: string,
   profiles: ProfileRow[],
   selfUserid: string,
-): InviteeResolution {
+  excludeUserids: string[] = [],
+): { matches: ProfileRow[]; resolution: InviteeResolution } {
   const trimmed = input.trim();
-  if (trimmed.length === 0) return null;
   const self = selfUserid.toLowerCase();
   const needle = trimmed.toLowerCase();
+  const excluded = new Set(excludeUserids.map((userid) => userid.toLowerCase()));
 
-  const matches = profiles.filter((profile) => {
-    if (profile.userid.toLowerCase() === self || profile.missingSince !== null)
-      return false;
-    return (
-      profile.userid.toLowerCase().includes(needle) ||
-      (profile.nickname?.toLowerCase().includes(needle) ?? false) ||
-      (profile.fullname?.toLowerCase().includes(needle) ?? false) ||
-      profile.hash.toLowerCase().includes(needle)
-    );
-  });
-  if (matches.length > 0) return { type: "profile", profile: matches[0] };
+  const eligible = profiles.filter(
+    (profile) =>
+      profile.userid.toLowerCase() !== self &&
+      profile.missingSince === null &&
+      !excluded.has(profile.userid.toLowerCase()),
+  );
+
+  if (trimmed.length === 0)
+    return { matches: eligible, resolution: null };
+
+  const anyExactHashProfile = profiles.find((profile) => profile.hash === trimmed);
+  const exactHashProfile = eligible.find(
+    (profile) => profile.hash === trimmed,
+  );
+  if (exactHashProfile)
+    return {
+      matches: [exactHashProfile],
+      resolution: { type: "profile", profile: exactHashProfile },
+    };
+  if (anyExactHashProfile)
+    return { matches: [], resolution: null };
+
+  const matches = eligible.filter((profile) =>
+    profile.userid.toLowerCase().includes(needle) ||
+    (profile.nickname?.toLowerCase().includes(needle) ?? false) ||
+    (profile.fullname?.toLowerCase().includes(needle) ?? false),
+  );
+  if (matches.length > 0)
+    return {
+      matches,
+      resolution: { type: "profile", profile: matches[0] },
+    };
 
   if (/^[a-z]{4}it\d{2}$/i.test(trimmed)) {
-    if (trimmed.toLowerCase() === self) return null;
-    return { type: "userid-not-found", userid: trimmed };
+    if (trimmed.toLowerCase() === self)
+      return { matches: [], resolution: null };
+    if (excluded.has(trimmed.toLowerCase()))
+      return { matches: [], resolution: null };
+    return {
+      matches: [],
+      resolution: { type: "userid-not-found", userid: trimmed },
+    };
   }
   if (/^[A-Za-z0-9]{8}$/.test(trimmed))
-    return { type: "hash", hash: trimmed };
-  return null;
+    return { matches: [], resolution: { type: "hash", hash: trimmed } };
+  return { matches: [], resolution: null };
 }
 
 export function findExistingDirectChat(

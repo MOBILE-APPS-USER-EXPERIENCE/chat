@@ -125,6 +125,7 @@ export default function InviteScreen() {
           selfUserid={selfUserid}
           selected={selected}
           onChange={setSelected}
+          excludeUserids={members.map((member) => member.userid)}
         />
         {error && <Text color="error">{error}</Text>}
         {success && <Text color="text">{success}</Text>}

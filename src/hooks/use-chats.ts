@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { storageEvents, syncRuntime } from "../messaging/runtime";
 import type { ChatRow } from "../storage/types";
+import { keepIfEqual } from "../utils/keep-if-equal";
 
 const STORAGE_RETRY_MS = 200;
 
@@ -35,7 +36,7 @@ export function useChats(filter?: { joined?: boolean }): {
         .list(joined === undefined ? undefined : { joined })
         .then((rows) => {
           if (cancelled || id !== requestId.current) return; // a later request already won
-          setChats(rows);
+          setChats((previous) => keepIfEqual(previous, rows));
           setLoading(false);
         })
         .catch(() => {

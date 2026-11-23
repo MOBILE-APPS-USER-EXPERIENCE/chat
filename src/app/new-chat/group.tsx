@@ -18,12 +18,13 @@ export default function NewGroupScreen() {
     setError(undefined);
     try {
       const result = await syncRuntime.createGroup({ name, isPublic });
-      if (result.refreshed)
-        router.replace({
+      if (result.refreshed) {
+        router.dismissAll();
+        router.push({
           pathname: "/chat/[chatId]",
           params: { chatId: String(result.chatId) },
         });
-      else router.replace("/");
+      } else router.replace("/");
     } catch (error_) {
       setError(describeChatActionError(error_));
     } finally {

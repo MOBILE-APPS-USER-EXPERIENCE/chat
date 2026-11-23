@@ -39,30 +39,60 @@ const chat = (id: number, directchat = false): ChatRow => ({
 });
 
 describe("resolveInvitee", () => {
-  it("matches nickname, userid and excludes self and missing profiles", () => {
+  it("matches nickname and fullname case-insensitively and excludes self and missing profiles", () => {
     const profiles = [
       profile("selfit01", "selfhash", "Ich"),
       profile("janit02", "J4nHash1", "Jana"),
       { ...profile("oldit03", "oldhash2", "Alt"), missingSince: 5 },
     ];
-    expect(resolveInvitee("jana", profiles, "SELFIT01")).toEqual({
+    expect(resolveInvitee("jana", profiles, "SELFIT01").resolution).toEqual({
       type: "profile",
       profile: profiles[1],
     });
-    expect(resolveInvitee("JANIT02", profiles, "selfit01")).toEqual({
+    expect(resolveInvitee("JANIT02", profiles, "selfit01").resolution).toEqual({
       type: "profile",
       profile: profiles[1],
     });
-    expect(resolveInvitee("selfit01", profiles, "selfit01")).toBeNull();
+    expect(resolveInvitee("selfit01", profiles, "selfit01").resolution).toBeNull();
+    expect(resolveInvitee("alt", profiles, "selfit01").matches).toEqual([]);
   });
 
-  it("offers an exact 8-character hash without lowercasing it", () => {
-    expect(resolveInvitee("AbCd1234", [profile("janit02", "other")], "selfit01"))
+  it("matches nickname and fullname without using hash substrings", () => {
+    const jana = { ...profile("janit02", "AbCd1234", "Jana"), fullname: "Jana Müller" };
+    expect(resolveInvitee("müller", [jana], "selfit01").resolution).toEqual({
+      type: "profile",
+      profile: jana,
+    });
+    expect(resolveInvitee("cd123", [jana], "selfit01").resolution).toBeNull();
+  });
+
+  it("selects a known profile for an exact case-sensitive hash", () => {
+    const jana = profile("janit02", "AbCd1234", "Jana");
+    expect(resolveInvitee("AbCd1234", [jana], "selfit01").resolution).toEqual({
+      type: "profile",
+      profile: jana,
+    });
+    expect(resolveInvitee("abcd1234", [jana], "selfit01").resolution).toEqual({
+      type: "hash",
+      hash: "abcd1234",
+    });
+  });
+
+  it("offers raw hash only for 8-char alphanumeric input not userid-shaped", () => {
+    expect(resolveInvitee("AbCd1234", [profile("janit02", "other")], "selfit01").resolution)
       .toEqual({ type: "hash", hash: "AbCd1234" });
+    expect(resolveInvitee("AbCd12", [profile("janit02", "other")], "selfit01").resolution)
+      .toBeNull();
+  });
+
+  it("excludes explicit userids and self", () => {
+    const jana = profile("janit02", "JanaHash", "Jana");
+    expect(resolveInvitee("jana", [jana], "janit02", ["janit02"]).matches).toEqual([]);
+    expect(resolveInvitee("jana", [jana], "selfit01", ["janit02"]).matches).toEqual([]);
   });
 
   it("shows a userid-shaped missing-profile hint", () => {
-    expect(resolveInvitee("abcdit02", [], "selfit01")).toEqual({
+    expect(resolveInvitee("abcdit02", [], "selfit01").resolution).toEqual({
       type: "userid-not-found",
       userid: "abcdit02",
     });

@@ -509,6 +509,37 @@ describe("SyncScheduler", () => {
     scheduler.stop();
   });
 
+  test("onSent ignores a held send after an account switch", async () => {
+    const { session, scheduler, factory, api, events } = setup(60_000);
+    const storage = await factory.open("acc1");
+    await storage.chats.applySnapshot([snap(1)], Date.now());
+    api.chats = [snap(1)];
+    api.messages.set(1, []);
+
+    const messageListener = jest.fn();
+    const outboxListener = jest.fn();
+    events.subscribeMessages(1, messageListener);
+    events.subscribeOutbox(1, outboxListener);
+
+    session.setState({ status: "signed_in", account: { id: "acc1" } });
+    scheduler.start();
+    await flush(80);
+
+    const releasePost = api.holdPost();
+    const sendPromise = scheduler.enqueueMessage(1, "held");
+    await flush(80);
+    outboxListener.mockClear();
+
+    session.setState({ status: "signed_in", account: { id: "acc2" } });
+    await flush(80);
+    releasePost();
+    await flush(80);
+    await sendPromise;
+    expect(messageListener).not.toHaveBeenCalled();
+    expect(outboxListener).not.toHaveBeenCalled();
+    scheduler.stop();
+  });
+
   test("flushOutbox while a drain is held runs a second drain after the held post finishes", async () => {
     const { session, scheduler, factory, api } = setup(60_000);
     const storage = await factory.open("acc1");

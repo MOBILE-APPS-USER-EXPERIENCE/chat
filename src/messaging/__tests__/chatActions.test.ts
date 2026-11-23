@@ -1,6 +1,5 @@
 /** @jest-environment node */
 
-import { ApiError, NetworkError } from "../../api/apiClient";
 import {
   ChatActions,
   InviteAfterCreateError,
@@ -58,9 +57,10 @@ describe("ChatActions", () => {
 
   it("creates a direct chat and invites with no admin key", async () => {
     const api = new FakeChatActionsApi();
+    const refreshChats = jest.fn().mockResolvedValue("updated");
     const actions = new ChatActions({
       api,
-      refreshChats: async () => "updated",
+      refreshChats,
     });
     await expect(
       actions.createDirectChat({
@@ -74,11 +74,38 @@ describe("ChatActions", () => {
       directChat: true,
     });
     expect(api.inviteCalls).toEqual([{ chatId: 42, hash: "AbCd1234" }]);
+    expect(refreshChats).toHaveBeenCalledTimes(2);
+  });
+
+  it("refresh called twice on success", async () => {
+    const api = new FakeChatActionsApi();
+    const refreshChats = jest
+      .fn()
+      .mockResolvedValueOnce("updated")
+      .mockResolvedValueOnce("offline");
+    const actions = new ChatActions({ api, refreshChats });
+
+    await expect(
+      actions.createDirectChat({ name: "Test", inviteeHash: "AbCd1234" }),
+    ).resolves.toEqual({ chatId: 42, refreshed: false });
+    expect(refreshChats).toHaveBeenCalledTimes(2);
+  });
+
+  it("refresh called once on invite failure", async () => {
+    const api = new FakeChatActionsApi();
+    api.inviteError = new Error("invite failed");
+    const refreshChats = jest.fn().mockResolvedValue("updated");
+    const actions = new ChatActions({ api, refreshChats });
+
+    await expect(
+      actions.createDirectChat({ name: "Test", inviteeHash: "AbCd1234" }),
+    ).rejects.toBeInstanceOf(InviteAfterCreateError);
+    expect(refreshChats).toHaveBeenCalledTimes(1);
   });
 
   it("wraps invite failure after creation and remains retryable", async () => {
     const api = new FakeChatActionsApi();
-    api.inviteError = new ApiError(463, "unknown");
+    api.inviteError = new Error("unknown");
     const actions = new ChatActions({
       api,
       refreshChats: async () => "updated",
@@ -116,14 +143,13 @@ describe("ChatActions", () => {
 
   it("passes NetworkError unchanged on invite", async () => {
     const api = new FakeChatActionsApi();
-    api.inviteError = new NetworkError();
+    const networkError = new Error("network");
+    api.inviteError = networkError;
     const actions = new ChatActions({
       api,
       refreshChats: async () => "updated",
     });
-    await expect(actions.invite(42, "AbCd1234")).rejects.toBeInstanceOf(
-      NetworkError,
-    );
+    await expect(actions.invite(42, "AbCd1234")).rejects.toBe(networkError);
   });
 
   it("refreshes chats after a successful invite", async () => {

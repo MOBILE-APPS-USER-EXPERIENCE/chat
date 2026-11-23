@@ -56,7 +56,8 @@ export default function DirectChatScreen() {
             otherUserid: selected.profile.userid,
           });
           if (existing !== null) {
-            router.replace({
+            router.dismissAll();
+            router.push({
               pathname: "/chat/[chatId]",
               params: { chatId: String(existing.id) },
             });
@@ -74,12 +75,13 @@ export default function DirectChatScreen() {
         name: `${ownNickname} – ${otherName}`,
         inviteeHash: hash,
       });
-      if (result.refreshed)
-        router.replace({
+      if (result.refreshed) {
+        router.dismissAll();
+        router.push({
           pathname: "/chat/[chatId]",
           params: { chatId: String(result.chatId) },
         });
-      else router.replace("/");
+      } else router.replace("/");
     } catch (error_) {
       if (error_ instanceof InviteAfterCreateError) {
         setRetry({
@@ -106,7 +108,8 @@ export default function DirectChatScreen() {
     setError(undefined);
     try {
       await syncRuntime.inviteToChat(retry.chatId, retry.hash);
-      router.replace({
+      router.dismissAll();
+      router.push({
         pathname: "/chat/[chatId]",
         params: { chatId: String(retry.chatId) },
       });

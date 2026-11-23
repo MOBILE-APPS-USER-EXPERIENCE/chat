@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { storageEvents, syncRuntime } from "../messaging/runtime";
 import type { ProfileRow } from "../storage/types";
+import { keepIfEqual } from "../utils/keep-if-equal";
 
 const STORAGE_RETRY_MS = 200;
 
@@ -27,7 +28,7 @@ export function useProfiles(): {
         .list()
         .then((rows) => {
           if (cancelled || id !== requestId.current) return;
-          setProfiles(rows);
+          setProfiles((previous) => keepIfEqual(previous, rows));
           setLoading(false);
         })
         .catch(() => {
