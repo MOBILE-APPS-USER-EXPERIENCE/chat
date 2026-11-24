@@ -62,12 +62,14 @@ const flush = async (): Promise<void> => {
 
 function Harness({
   chatId,
+  targetId,
   onResult,
 }: Readonly<{
   chatId: number;
+  targetId?: number;
   onResult: (result: ReturnType<typeof useMessages>) => void;
 }>) {
-  const result = useMessages(chatId);
+  const result = useMessages(chatId, { targetId });
   onResult(result);
   return null;
 }
@@ -134,6 +136,25 @@ describe("useMessages", () => {
     });
     expect(latest?.messages.map((message) => message.id)).toEqual([2, 1]);
     renderer?.unmount();
+  });
+
+  test("jumps to an older message without restarting the chat poller", async () => {
+    await storage.messages.appendBatch(1, Array.from({ length: 45 }, (_, index) => msg(index + 1)), 0);
+    let latest: ReturnType<typeof useMessages> | undefined;
+    const onResult = (result: ReturnType<typeof useMessages>) => { latest = result; };
+    let renderer: ReturnType<typeof create> | undefined;
+    await act(async () => {
+      renderer = create(React.createElement(Harness, { chatId: 1, onResult }));
+    });
+    expect(latest?.messages[0]?.id).toBe(45);
+    expect(latest?.messages.some(({ id }) => id === 3)).toBe(false);
+
+    await act(async () => {
+      renderer?.update(React.createElement(Harness, { chatId: 1, targetId: 3, onResult }));
+    });
+    expect(latest?.messages.map(({ id }) => id)).toEqual([3, 2, 1]);
+    expect(runtimeMock.__pollNow).toHaveBeenCalledTimes(1);
+    await act(async () => renderer?.unmount());
   });
 
   test("loadOlder appends an older page and updates hasMore", async () => {

@@ -22,6 +22,26 @@ textarea:focus-visible {
   outline: none !important;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .message-with-options {
+    transform: none !important;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .message-options-trigger {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .message-with-options:hover .message-options-trigger,
+  .message-options-trigger:focus-visible,
+  .message-options-trigger[aria-expanded='true'] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* Respect the user's preference for reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

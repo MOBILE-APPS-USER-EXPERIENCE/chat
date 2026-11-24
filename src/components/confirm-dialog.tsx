@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Adapt, Button, Dialog, Sheet, Text, XStack, YStack } from 'tamagui';
 
 import { Spacing } from '@/config/layout';
@@ -13,6 +14,7 @@ function ConfirmDialog({
     destructive = true,
     onConfirm,
     onCancel,
+    children,
 }: Readonly<{
     visible: boolean;
     title: string;
@@ -22,6 +24,7 @@ function ConfirmDialog({
     destructive?: boolean;
     onConfirm: () => void;
     onCancel: () => void;
+    children?: ReactNode;
 }>) {
     const insets = useSafeAreaInsets();
     return (
@@ -48,7 +51,7 @@ function ConfirmDialog({
                         destructive={destructive}
                         onConfirm={onConfirm}
                         onCancel={onCancel}
-                    />
+                    >{children}</DialogContent>
                 </Dialog.Content>
             </Dialog.Portal>
             <Adapt when="max-md" platform="touch">
@@ -74,6 +77,7 @@ function DialogContent({
     destructive,
     onConfirm,
     onCancel,
+    children,
 }: Readonly<{
     title: string;
     message: string;
@@ -82,6 +86,7 @@ function DialogContent({
     destructive: boolean;
     onConfirm: () => void;
     onCancel: () => void;
+    children?: ReactNode;
 }>) {
     return (
         <>
@@ -94,12 +99,13 @@ function DialogContent({
                 </Dialog.Description>
             </YStack>
 
+            {children}
             <XStack justify="flex-end" gap={8} mt={8}>
-                <Dialog.Close asChild displayWhenAdapted>
+                <Dialog.Close asChild displayWhenAdapted aria-label={cancelLabel}>
                     <Button onPress={onCancel}>{cancelLabel}</Button>
                 </Dialog.Close>
                 {destructive ? (
-                    <Dialog.Close asChild displayWhenAdapted>
+                    <Dialog.Close asChild displayWhenAdapted aria-label={confirmLabel}>
                         <Button
                             backgroundColor="error"
                             color="errorText"
@@ -111,7 +117,7 @@ function DialogContent({
                         </Button>
                     </Dialog.Close>
                 ) : (
-                    <Dialog.Close asChild displayWhenAdapted>
+                    <Dialog.Close asChild displayWhenAdapted aria-label={confirmLabel}>
                         <Button onPress={onConfirm}>{confirmLabel}</Button>
                     </Dialog.Close>
                 )}
