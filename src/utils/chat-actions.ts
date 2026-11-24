@@ -111,7 +111,7 @@ export function findExistingDirectChat(
 export function chatDisplayName(args: {
   chat: ChatRow;
   members: { userid: string }[];
-  profiles: ProfileRow[];
+  profiles: readonly ProfileRow[];
   selfUserid: string;
 }): string {
   if (!args.chat.directchat) return args.chat.name;

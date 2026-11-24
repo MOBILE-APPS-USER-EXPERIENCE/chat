@@ -6,6 +6,7 @@ import { Button, isWeb, Spinner, Text, XStack, YStack } from "tamagui";
 import Avatar from "@/components/avatar";
 import ExamPhaseCard from "@/components/exam-phase-card";
 import Header from "@/components/header";
+import { MessageSearchInput, MessageSearchResults } from "@/components/message-search";
 import { Plus } from "@/components/icons";
 import { config } from "@/config/config";
 import { Spacing } from "@/config/layout";
@@ -162,6 +163,7 @@ export default function Index() {
   const previews = useChatPreviews();
   const { profiles } = useProfiles();
   const [nowMs, setNowMs] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
   const session = useSession();
   const selfUserid =
     session.status === "signed_in" ? session.account.userid : "";
@@ -187,15 +189,27 @@ export default function Index() {
       />
 
       <YStack flex={1} gap={Spacing.two} pt={Spacing.two}>
-        <ExamPhaseCard />
-        <ChatListBody
-          loading={loading}
-          chats={sortedChats}
-          profiles={profiles}
-          selfUserid={selfUserid}
-          latestByChat={previews.latestByChat}
-          nowMs={nowMs}
-        />
+        <MessageSearchInput value={searchQuery} onChange={setSearchQuery} />
+        {searchQuery.trim() ? (
+          <MessageSearchResults accountId={session.status === "signed_in" ? session.account.id : undefined}
+            query={searchQuery} profiles={profiles} selfUserid={selfUserid}
+            onSelectChat={(chat) => router.push({ pathname: "/chat/[chatId]", params: { chatId: String(chat.id) } })}
+            onSelect={({ chat, message }) => {
+              router.push({ pathname: "/chat/[chatId]", params: { chatId: String(chat.id), messageId: String(message.id) } });
+            }} />
+        ) : (
+          <>
+            <ExamPhaseCard />
+            <ChatListBody
+              loading={loading}
+              chats={sortedChats}
+              profiles={profiles}
+              selfUserid={selfUserid}
+              latestByChat={previews.latestByChat}
+              nowMs={nowMs}
+            />
+          </>
+        )}
       </YStack>
       {!isWeb && (
         <YStack

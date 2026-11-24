@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { setActiveContext } from '../api/apiClient';
 import * as authService from '../api/authService';
-import { keyValueStore, registry, secretStore } from '../storage';
+import { keyValueStore, messageReactionsStore, messageTagsStore, registry, secretStore } from '../storage';
 import { accountStorage } from '../storage/accountStorage';
 import type { AuthApi } from './ports';
 import { headersForServer } from './serverHeaders';
@@ -35,5 +35,15 @@ export const session = new SessionService({
     // Users have to log in again after the update; old plain-text values are removed.
     legacyCleanup: () => AsyncStorage.multiRemove(LEGACY_KEYS),
     // Removing an account also deletes its local database (best effort, see ADR-005).
-    onAccountRemoved: (accountId) => accountStorage.destroy(accountId),
+    onAccountRemoved: async (accountId) => {
+        await Promise.all([
+            accountStorage.destroy(accountId),
+            messageTagsStore.removeAccount(accountId).catch(() => {
+                console.warn('Local message tags could not be removed.');
+            }),
+            messageReactionsStore.removeAccount(accountId).catch(() => {
+                console.warn('Local message reactions could not be removed.');
+            }),
+        ]);
+    },
 });
