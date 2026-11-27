@@ -6,17 +6,17 @@ import MessageReactionPicker from "@/components/message-reaction-picker";
 import { Spacing } from "@/config/layout";
 import type { MessageOptionsButtonProps } from "./message-options-button";
 
-export default function MessageOptionsButton({ messageId, onEditTags, onReply, reaction, onReact }: MessageOptionsButtonProps) {
+export default function MessageOptionsButton({ messageId, onEditTags, onReply, reaction, onReact, onEdit }: MessageOptionsButtonProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen} placement="top-end" offset={Spacing.one}
       allowFlip={{ padding: Spacing.two }} stayInFrame={{ padding: Spacing.two }}>
       <Popover.Trigger asChild>
-        <Button className="message-options-trigger" size="sm" w={Spacing.six} px={Spacing.one}
+        <Button className="message-options-trigger" size="sm" w={Spacing.four} h={Spacing.four} p={0}
           variant="quiet" aria-label={`Optionen für Nachricht ${messageId}`}>
           <XStack rotate="-90deg" aria-hidden>
-            <ChevronLeft color="text" size={16} />
+            <ChevronLeft color="text" size={12} />
           </XStack>
         </Button>
       </Popover.Trigger>
@@ -31,6 +31,12 @@ export default function MessageOptionsButton({ messageId, onEditTags, onReply, r
           setOpen(false);
           onReply();
         }}>Antworten</Button>
+        {onEdit && (
+          <Button size="sm" variant="quiet" onPress={() => {
+            setOpen(false);
+            onEdit();
+          }}>Nachricht bearbeiten</Button>
+        )}
         <Button size="sm" variant="quiet" onPress={() => {
           setOpen(false);
           onEditTags();

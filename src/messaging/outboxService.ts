@@ -25,7 +25,7 @@ export type OutboxDeps = {
    */
   onRowChanged?: (
     chatId: number,
-    reason: "sent" | "failed" | "discarded",
+    reason: "sent" | "failed" | "discarded" | "updated",
   ) => void;
   /**
    * Called synchronously right after a row's message was successfully posted and removed from
@@ -119,6 +119,15 @@ export class OutboxService {
     return true;
   }
 
+  /** Changes the text of a row that is not being sent right now. */
+  async updateText(clientMessageId: string, text: string): Promise<boolean> {
+    const updated =
+      await this.deps.storage.outbox.updateText(clientMessageId, text);
+    if (updated === null) return false;
+    this.notifyRowChanged(updated.chatId, "updated");
+    return true;
+  }
+
   /** After this, no further writes; an in-flight `drain()` finishes without writing. */
   dispose(): void {
     this.disposed = true;
@@ -179,7 +188,7 @@ export class OutboxService {
 
   private notifyRowChanged(
     chatId: number,
-    reason: "sent" | "failed" | "discarded",
+    reason: "sent" | "failed" | "discarded" | "updated",
   ): void {
     try {
       this.deps.onRowChanged?.(chatId, reason);

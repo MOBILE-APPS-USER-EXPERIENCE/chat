@@ -159,6 +159,8 @@ export interface OutboxRepository {
   remove(clientMessageId: string): Promise<void>;
   /** Removes a row only when it is not currently sending; returns the removed row, or null. */
   discard(clientMessageId: string): Promise<OutboxRow | null>;
+  /** Changes the text of a row that is not currently sending; returns the updated row, or null. */
+  updateText(clientMessageId: string, text: string): Promise<OutboxRow | null>;
   /** Resets every 'sending' row back to 'pending' (recovers from a crash mid-send). */
   resetStuckSending(): Promise<void>;
 }

@@ -158,6 +158,22 @@ export class SqliteOutboxRepository implements OutboxRepository {
     });
   }
 
+  async updateText(clientMessageId: string, text: string): Promise<OutboxRow | null> {
+    return this.db.transaction((tx) => {
+      const row = tx
+        .select()
+        .from(outbox)
+        .where(eq(outbox.clientMessageId, clientMessageId))
+        .get();
+      if (!row || row.status === "sending") return null;
+      tx.update(outbox)
+        .set({ text })
+        .where(eq(outbox.clientMessageId, clientMessageId))
+        .run();
+      return toOutboxRow({ ...row, text });
+    });
+  }
+
   async resetStuckSending(): Promise<void> {
     this.db
       .update(outbox)

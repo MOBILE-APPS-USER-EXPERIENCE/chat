@@ -1,5 +1,6 @@
 import type { ChatRow, RawMessage } from "../storage/types";
 import { formatClock } from "./format-date-times";
+import { displayText } from "./message-edit";
 
 export function chatActivityTime(chat: ChatRow, latest: RawMessage | undefined): number {
   if (!latest) return chat.firstSeenAt;
@@ -24,7 +25,7 @@ export function previewText(
   selfUserid: string,
   isDirect: boolean,
 ): string {
-  const text = message.text?.replace(/\s+/g, " ").trim() ?? "";
+  const text = displayText(message.text)?.replace(/\s+/g, " ").trim() ?? "";
   let body = text;
   if (body.length === 0) {
     if (message.photoId) body = "Foto";

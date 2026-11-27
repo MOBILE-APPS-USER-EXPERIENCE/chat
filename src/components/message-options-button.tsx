@@ -6,6 +6,8 @@ export type MessageOptionsButtonProps = {
   onReply: () => void;
   reaction?: string;
   onReact: (emoji: string) => void;
+  /** Only set for messages the current user may edit (own text messages). */
+  onEdit?: () => void;
 };
 
 const MessageOptionsButton: ComponentType<MessageOptionsButtonProps> = () => null;

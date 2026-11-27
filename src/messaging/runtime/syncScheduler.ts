@@ -250,6 +250,12 @@ export class SyncScheduler {
     return discarded;
   }
 
+  /** Changes the text of an unsent outbox message (ADR-006). False while it is being sent. */
+  async updateOutboxText(clientMessageId: string, text: string): Promise<boolean> {
+    if (this.outboxService === null) return false;
+    return this.outboxService.updateText(clientMessageId, text);
+  }
+
   // ---- session / foreground transitions --------------------------------------------------
 
   private async handleSessionChange(): Promise<void> {

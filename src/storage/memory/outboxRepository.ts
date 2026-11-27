@@ -99,6 +99,13 @@ export class MemoryOutboxRepository implements OutboxRepository {
     return { ...row };
   }
 
+  async updateText(clientMessageId: string, text: string): Promise<OutboxRow | null> {
+    const row = this.db.outbox.get(clientMessageId);
+    if (!row || row.status === "sending") return null;
+    row.text = text;
+    return { ...row };
+  }
+
   async resetStuckSending(): Promise<void> {
     for (const row of this.db.outbox.values()) {
       if (row.status === "sending") row.status = "pending";
