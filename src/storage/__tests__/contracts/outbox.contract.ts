@@ -116,6 +116,25 @@ export function outboxRepositoryContract(
       expect(await storage.outbox.discard("unknown-id")).toBeNull();
     });
 
+    it("updates the text of a non-sending row in place", async () => {
+      await storage.outbox.enqueue(input(1, "alt"), "cid-a", 1000);
+      await storage.outbox.enqueue(input(1, "danach"), "cid-b", 1100);
+      await storage.outbox.enqueue(input(1, "sending"), "cid-sending", 1200);
+      await storage.outbox.markSending("cid-sending");
+
+      expect(await storage.outbox.updateText("cid-a", "neu")).toMatchObject({
+        clientMessageId: "cid-a",
+        text: "neu",
+      });
+      expect(await storage.outbox.updateText("cid-sending", "x")).toBeNull();
+      expect(await storage.outbox.updateText("unknown-id", "x")).toBeNull();
+      expect((await storage.outbox.listByChat(1)).map((r) => [r.clientMessageId, r.text])).toEqual([
+        ["cid-a", "neu"],
+        ["cid-b", "danach"],
+        ["cid-sending", "sending"],
+      ]);
+    });
+
     it("lists chat ids blocked by sending or future-failed rows", async () => {
       await storage.outbox.enqueue(input(1, "sending"), "cid-sending", 1000);
       await storage.outbox.markSending("cid-sending");

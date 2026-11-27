@@ -5,6 +5,7 @@ import { FlatList, KeyboardAvoidingView } from "react-native";
 import { Button, isWeb, Spinner, Text, TextArea, XStack, YStack } from "tamagui";
 
 import ConfirmDialog from "@/components/confirm-dialog";
+import EditMessageBanner from "@/components/edit-message-banner";
 import Header from "@/components/header";
 import MessageMarkdown from "@/components/message-markdown";
 import MessageOptionsButton from "@/components/message-options-button";
@@ -22,11 +23,13 @@ import {
 import { Spacing } from "@/config/layout";
 import { useChat } from "@/hooks/use-chat";
 import { useChatMembers } from "@/hooks/use-chat-members";
+import { useMessageEdit, type EditTarget } from "@/hooks/use-message-edit";
 import { useMessageSwipe } from "@/hooks/use-message-swipe";
 import { useMessages, useTaggedMessages } from "@/hooks/use-messages";
 import { useMessageSearch } from "@/hooks/use-message-search";
 import { useOutbox } from "@/hooks/use-outbox";
 import { useProfiles } from "@/hooks/use-profiles";
+import { syncRuntime } from "@/messaging/runtime";
 import { useSession } from "@/session/useSession";
 import { messageReactionsStore, messageTagsStore } from "@/storage";
 import type { ChatMessageReactions } from "@/storage/messageReactions";
@@ -34,6 +37,13 @@ import type { ChatMessageTags } from "@/storage/messageTags";
 import type { OutboxRow, RawMessage } from "@/storage/types";
 import { chatDisplayName } from "@/utils/chat-actions";
 import { formatClock } from "@/utils/format-date-times";
+import {
+  applyMessageEdits,
+  canEditMessage,
+  isEditChange,
+  isEditMessageText,
+  pendingEditsByTarget,
+} from "@/utils/message-edit";
 import { replyPreview, replyText } from "@/utils/message-reply";
 import {
   formatMessageSelection,
@@ -103,6 +113,10 @@ const MessageRow = memo(function MessageRow({
   onReact,
   onReply,
   highlighted,
+  edited,
+  pendingEdit,
+  onEdit,
+  onRetryEdit,
 }: Readonly<{
   message: RawMessage;
   isOwn: boolean;
@@ -115,6 +129,10 @@ const MessageRow = memo(function MessageRow({
   onReact: (id: number, emoji: string) => void;
   onReply: (message: RawMessage) => void;
   highlighted: boolean;
+  edited: boolean;
+  pendingEdit?: PendingEdit;
+  onEdit?: (message: RawMessage) => void;
+  onRetryEdit: () => void;
 }>) {
   const topLeftRadius = !isGroupStart || isOwn ? 8 : 0;
   const topRightRadius = !isGroupStart || !isOwn ? 8 : 0;
@@ -125,6 +143,10 @@ const MessageRow = memo(function MessageRow({
   return (
     <Bubble
       onLongPress={gesture.onLongPress}
+      accessibilityActions={[{ name: "longpress", label: "Nachrichtenoptionen" }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "longpress") openMenu();
+      }}
       gestureSurface={gesture.surface}
       offset={gesture.offset}
       className="message-with-options"
@@ -143,7 +165,8 @@ const MessageRow = memo(function MessageRow({
         // Sits in the bubble's left padding so the arrow never covers the text.
         <XStack position="absolute" t={0} l={-Spacing.one} z={1}>
           <MessageOptionsButton messageId={message.id} onEditTags={() => onEditTags(message.id)}
-            reaction={reaction} onReact={(emoji) => onReact(message.id, emoji)} onReply={reply} />
+            reaction={reaction} onReact={(emoji) => onReact(message.id, emoji)} onReply={reply}
+            onEdit={onEdit ? () => onEdit(message) : undefined} />
         </XStack>
       )}
       {isGroupStart && !isOwn && (
@@ -151,7 +174,7 @@ const MessageRow = memo(function MessageRow({
           {message.userNick ?? message.userFullname ?? message.userid}
         </Text>
       )}
-      <MessageMarkdown text={message.text ?? ""} />
+      <MessageMarkdown text={pendingEdit?.editText ?? message.text ?? ""} />
       {reaction && (
         <Text self="flex-start" color="text" backgroundColor="backgroundSecondary" rounded={Spacing.one}
           px={Spacing.two} py={Spacing.one} aria-label={`Deine lokale Reaktion: ${reactionLabel(reaction)}`}>
@@ -175,11 +198,25 @@ const MessageRow = memo(function MessageRow({
         justify="flex-end"
         mr={-Spacing.two}
       >
+        {pendingEdit?.status === "failed" ? (
+          <Text color="error" fontSize={11}>
+            {pendingEdit.lastError === "offline" ? "Keine Verbindung" : "Speichern fehlgeschlagen"}
+          </Text>
+        ) : pendingEdit ? (
+          <Text color="textSecondary" fontSize={11}>wird gespeichert…</Text>
+        ) : edited && (
+          <Text color="textSecondary" fontSize={11}>bearbeitet</Text>
+        )}
         <Text color="textSecondary" fontSize={11} self="flex-end">
           {formatClock(message.sentAt ?? message.receivedAt)}
         </Text>
         {isOwn && <Check color="textSecondary" size={12} />}
       </XStack>
+      {pendingEdit?.status === "failed" && (
+        <Button py={Spacing.one} px={Spacing.two} self="flex-end" onPress={onRetryEdit}>
+          Erneut versuchen
+        </Button>
+      )}
     </Bubble>
   );
 });
@@ -195,14 +232,21 @@ function PendingRow({
   isGroupStart,
   isNewest,
   onDiscard,
+  onOpenMenu,
 }: Readonly<{
   row: OutboxRow;
   isGroupStart: boolean;
   isNewest: boolean;
   onDiscard: (row: OutboxRow) => void;
+  onOpenMenu: (row: OutboxRow) => void;
 }>) {
   return (
     <Bubble
+      onLongPress={() => onOpenMenu(row)}
+      accessibilityActions={[{ name: "longpress", label: "Nachrichtenoptionen" }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "longpress") onOpenMenu(row);
+      }}
       isOwn
       isGroupStart={isGroupStart}
       isNewest={isNewest}
@@ -278,6 +322,8 @@ function SystemMessageRow({ text }: { text: string }) {
   )
 }
 
+type PendingEdit = OutboxRow & { editText: string };
+
 type ListEntry =
   | { kind: "message"; message: RawMessage }
   | { kind: "pending"; row: OutboxRow }
@@ -311,6 +357,9 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
   const activeTargetId = (searching ? searchResult?.hits[activeIndex]?.message.id : undefined) ?? targetId;
   const { messages, loading, loadOlder } = useMessages(chatId, { targetId: activeTargetId });
   const { pending, sending, send, discard } = useOutbox(chatId);
+  const messageEdit = useMessageEdit(chatId);
+  const { start: startEditMode, cancel: cancelEditMode } = messageEdit;
+  const [menuRow, setMenuRow] = useState<OutboxRow | null>(null);
   const [text, setText] = useState("");
   const inputRef = useRef<TamaguiElement>(null);
   const [selection, setSelection] = useState<MessageSelection>();
@@ -356,8 +405,29 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
   const startReply = useCallback((message: RawMessage) => {
     setQuote(replyPreview(message, currentUserId));
     setEditingMessageId(null);
+    cancelEditMode();
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [currentUserId]);
+  }, [currentUserId, cancelEditMode]);
+
+  // ADR-006: edit messages are hidden; originals show the newest text and "bearbeitet".
+  const shown = useMemo(() => applyMessageEdits(messages), [messages]);
+  const pendingEdits = useMemo(() => pendingEditsByTarget(pending), [pending]);
+
+  const startEdit = useCallback((next: EditTarget) => {
+    startEditMode(next);
+    setText(next.text);
+    setQuote(null);
+    setEditingMessageId(null);
+    setSelection(undefined);
+    setRestoredSelection(undefined);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [startEditMode]);
+
+  const editMessage = useCallback((message: RawMessage) => {
+    startEdit({ kind: "sent", id: message.id, text: pendingEdits.get(message.id)?.editText ?? message.text ?? "" });
+  }, [startEdit, pendingEdits]);
+
+  const retryEdits = useCallback(() => syncRuntime.flushOutbox(chatId), [chatId]);
 
   const reactToMessage = useCallback((id: number, emoji: string) => {
     setReactionError(undefined);
@@ -374,10 +444,10 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
     const combined: ListEntry[] = taggedIds !== null
       ? (taggedResult?.messages ?? []).map((message) => ({ kind: "message", message }))
       : [
-          ...(activeTargetId === null ? [...pending] : [])
+          ...(activeTargetId === null ? pending.filter((row) => !isEditMessageText(row.text)) : [])
             .reverse()
             .map((row): ListEntry => ({ kind: "pending", row })),
-          ...messages.map((message): ListEntry => ({ kind: "message", message })),
+          ...shown.messages.map((message): ListEntry => ({ kind: "message", message })),
         ];
 
     const withSeparators: ListEntry[] = [];
@@ -406,7 +476,7 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
     });
 
     return withSeparators;
-  }, [messages, pending, taggedIds, taggedResult, activeTargetId]);
+  }, [shown, pending, taggedIds, taggedResult, activeTargetId]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: ListEntry; index: number }) => {
@@ -437,6 +507,7 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
             isGroupStart={isGroupStart}
             isNewest={isNewest}
             onDiscard={setDiscardRow}
+            onOpenMenu={setMenuRow}
           />
         );
 
@@ -453,13 +524,19 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
           onReact={reactToMessage}
           onReply={startReply}
           highlighted={item.message.id === activeTargetId}
+          edited={shown.editedIds.has(item.message.id)}
+          pendingEdit={pendingEdits.get(item.message.id)}
+          onEdit={canEditMessage(item.message, currentUserId) ? editMessage : undefined}
+          onRetryEdit={retryEdits}
         />
       );
     },
-    [entries, currentUserId, tagsByMessage, activeTargetId, reactions, reactToMessage, startReply],
+    [entries, currentUserId, tagsByMessage, activeTargetId, reactions, reactToMessage, startReply,
+      shown, pendingEdits, editMessage, retryEdits],
   );
 
-  const canSend = text.trim().length > 0 && !sending;
+  const canSend = (messageEdit.target ? isEditChange(messageEdit.target.text, text) : text.trim().length > 0)
+    && !sending && !messageEdit.saving;
   const selectedText = selection ? text.slice(selection.start, selection.end).trim() : "";
   const displayName =
     chat === null
@@ -472,6 +549,14 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
       });
 
   async function handleSend() {
+    if (messageEdit.target) {
+      if (await messageEdit.save(text)) {
+        setText("");
+        setSelection(undefined);
+        setRestoredSelection(undefined);
+      }
+      return;
+    }
     const toSend = replyText(text, quote);
     setError(undefined);
     try {
@@ -635,6 +720,14 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
           px={Spacing.three}
           py={Spacing.three}
         >
+          {messageEdit.target && (
+            <EditMessageBanner originalText={messageEdit.target.text} error={messageEdit.error}
+              saving={messageEdit.saving} onRetry={() => void handleSend()}
+              onCancel={() => {
+                cancelEditMode();
+                setText("");
+              }} />
+          )}
           {quote && (
             <XStack items="center" gap={Spacing.two} backgroundColor="backgroundElement"
               borderLeftWidth={2} borderLeftColor="accent" px={Spacing.two} py={Spacing.one}>
@@ -756,7 +849,28 @@ function ChatContent({ chatId, accountId, currentUserId, initialTargetId }: Read
           if (menuMessage) startReply(menuMessage);
           setMenuMessage(null);
         }}>Antworten</Button>
+        {menuMessage && canEditMessage(menuMessage, currentUserId) && (
+          <Button size="sm" variant="quiet" onPress={() => {
+            editMessage(menuMessage);
+            setMenuMessage(null);
+          }}>Nachricht bearbeiten</Button>
+        )}
       </ConfirmDialog>
+      <ConfirmDialog
+        visible={menuRow !== null}
+        title="Nachrichtenoptionen"
+        message="Diese Nachricht ist noch nicht gesendet."
+        confirmLabel="Nachricht bearbeiten"
+        cancelLabel="Abbrechen"
+        destructive={false}
+        onConfirm={() => {
+          if (menuRow) {
+            startEdit({ kind: "pending", clientMessageId: menuRow.clientMessageId, text: menuRow.text ?? "" });
+          }
+          setMenuRow(null);
+        }}
+        onCancel={() => setMenuRow(null)}
+      />
       <ConfirmDialog
         visible={discardRow !== null}
         title="Nachricht verwerfen"

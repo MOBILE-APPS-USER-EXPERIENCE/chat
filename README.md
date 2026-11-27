@@ -48,8 +48,13 @@ dieses Repositories.
 - Öffentliche Chats suchen und beitreten.
 - Offline-Lesen gespeicherter Daten, lokale Outbox und automatischer Retry:
   [Offline-Verhalten](docs/offline-behaviour.md).
+- Eigene Textnachrichten bearbeiten (langes Drücken oder Pfeil → „Nachricht bearbeiten“).
+  Ungesendete Nachrichten werden direkt in der Outbox geändert. Gesendete Nachrichten erhalten
+  eine Korrektur-Nachricht `[edit:<id>] <Text>`; diese App zeigt daraufhin den neuen Text mit
+  „bearbeitet“. Das ist eine Client-Konvention ([ADR-006](docs/adr/adr-006_message-edit-convention.md)):
+  Andere Apps zeigen die Korrektur als normale Nachricht, und der alte Text bleibt auf dem Server.
 
-Nicht implementiert sind das Bearbeiten oder Löschen gesendeter Nachrichten,
+Nicht implementiert sind das Löschen gesendeter Nachrichten,
 Reaktionen, Anhänge/Uploads, QR-Code-Scannen und Push-Nachrichten.
 
 ## Architektur

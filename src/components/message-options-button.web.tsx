@@ -6,7 +6,7 @@ import MessageReactionPicker from "@/components/message-reaction-picker";
 import { Spacing } from "@/config/layout";
 import type { MessageOptionsButtonProps } from "./message-options-button";
 
-export default function MessageOptionsButton({ messageId, onEditTags, onReply, reaction, onReact }: MessageOptionsButtonProps) {
+export default function MessageOptionsButton({ messageId, onEditTags, onReply, reaction, onReact, onEdit }: MessageOptionsButtonProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,6 +31,12 @@ export default function MessageOptionsButton({ messageId, onEditTags, onReply, r
           setOpen(false);
           onReply();
         }}>Antworten</Button>
+        {onEdit && (
+          <Button size="sm" variant="quiet" onPress={() => {
+            setOpen(false);
+            onEdit();
+          }}>Nachricht bearbeiten</Button>
+        )}
         <Button size="sm" variant="quiet" onPress={() => {
           setOpen(false);
           onEditTags();
