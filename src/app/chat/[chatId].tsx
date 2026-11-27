@@ -139,6 +139,13 @@ const MessageRow = memo(function MessageRow({
       borderWidth={highlighted ? 2 : 0}
       borderColor="accent"
     >
+      {onEditTags && (
+        // Sits in the bubble's left padding so the arrow never covers the text.
+        <XStack position="absolute" t={0} l={-Spacing.one} z={1}>
+          <MessageOptionsButton messageId={message.id} onEditTags={() => onEditTags(message.id)}
+            reaction={reaction} onReact={(emoji) => onReact(message.id, emoji)} onReply={reply} />
+        </XStack>
+      )}
       {isGroupStart && !isOwn && (
         <Text fontWeight="600" color="text">
           {message.userNick ?? message.userFullname ?? message.userid}
@@ -172,10 +179,6 @@ const MessageRow = memo(function MessageRow({
           {formatClock(message.sentAt ?? message.receivedAt)}
         </Text>
         {isOwn && <Check color="textSecondary" size={12} />}
-        {onEditTags && (
-          <MessageOptionsButton messageId={message.id} onEditTags={() => onEditTags(message.id)}
-            reaction={reaction} onReact={(emoji) => onReact(message.id, emoji)} onReply={reply} />
-        )}
       </XStack>
     </Bubble>
   );

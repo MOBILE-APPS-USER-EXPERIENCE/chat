@@ -13,10 +13,10 @@ export default function MessageOptionsButton({ messageId, onEditTags, onReply, r
     <Popover open={open} onOpenChange={setOpen} placement="top-end" offset={Spacing.one}
       allowFlip={{ padding: Spacing.two }} stayInFrame={{ padding: Spacing.two }}>
       <Popover.Trigger asChild>
-        <Button className="message-options-trigger" size="sm" w={Spacing.six} px={Spacing.one}
+        <Button className="message-options-trigger" size="sm" w={Spacing.four} h={Spacing.four} p={0}
           variant="quiet" aria-label={`Optionen für Nachricht ${messageId}`}>
           <XStack rotate="-90deg" aria-hidden>
-            <ChevronLeft color="text" size={16} />
+            <ChevronLeft color="text" size={12} />
           </XStack>
         </Button>
       </Popover.Trigger>
