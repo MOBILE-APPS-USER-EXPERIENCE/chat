@@ -2,6 +2,7 @@ import { ApiError, NetworkError } from "@/api/apiClient";
 import { ChatActionRejectedError } from "@/messaging/errors";
 
 import { describeAuthError } from "./auth-error";
+import { stripStudyRoomPrefix } from "./study-room-name";
 import type { ChatRow, ProfileRow } from "@/storage/types";
 
 export type InviteeResolution =
@@ -114,7 +115,7 @@ export function chatDisplayName(args: {
   profiles: readonly ProfileRow[];
   selfUserid: string;
 }): string {
-  if (!args.chat.directchat) return args.chat.name;
+  if (!args.chat.directchat) return stripStudyRoomPrefix(args.chat.name);
   const self = args.selfUserid.toLowerCase();
   const other = args.members.find(
     (member) => member.userid.toLowerCase() !== self,

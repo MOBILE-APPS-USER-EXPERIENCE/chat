@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { Button, Spinner, Text, XStack, YStack } from "tamagui";
 
 import Header from "@/components/header";
+import StudyRoomSection from "@/components/study-room-list";
 import { FontSize, Spacing } from "@/config/layout";
 import { useLearningStatus } from "@/hooks/use-learning-status";
 import {
@@ -81,7 +82,10 @@ export default function ExamPhaseScreen() {
           {status === null ? (
             <MissingStatusCard />
           ) : (
-            <StatusCard status={status} />
+            <>
+              <StatusCard status={status} />
+              <StudyRoomSection status={status} />
+            </>
           )}
         </YStack>
       )}
