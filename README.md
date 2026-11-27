@@ -88,3 +88,23 @@ Zeitumrechnung. Sie richten sich nicht gegen das echte Backend.
 - Regeln für Menschen und KI-Agenten: [`AGENTS.md`](AGENTS.md)
 - Architekturentscheidungen: `docs/adr/`
 - Dokumentation KI-gestützter Entwürfe: `docs/ai-use/`
+
+
+## Definition of Ready
+
+Eine Story darf in den Sprint, wenn:
+
+- sie als User Story formuliert ist (Rolle, Ziel, Nutzen),
+- prüfbare Akzeptanzkriterien hat, auch für Laden, leer und Fehler,
+- Abhängigkeiten und API-Endpunkte bekannt sind,
+- sie in einen Sprint passt und schätzbar ist.
+
+## Definition of Done
+
+Eine Story ist fertig, wenn:
+
+- alle Akzeptanzkriterien erfüllt sind,
+- sie per Pull Request kam und reviewt wurde,
+- sie auf Gerät oder Emulator und im Web läuft,
+- Laden, leer und Fehler umgesetzt sind,
+- das Issue auf „Done“ steht.
